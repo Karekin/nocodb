@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import requestIp from 'request-ip';
 import cookieParser from 'cookie-parser';
-import { NcDebug } from 'nc-gui/utils/debug';
+import { NcDebug } from '~/utils/debug';
 import type { INestApplication } from '@nestjs/common';
 import type { MetaService } from '~/meta/meta.service';
 import type { IEventEmitter } from '~/modules/event-emitter/event-emitter.interface';

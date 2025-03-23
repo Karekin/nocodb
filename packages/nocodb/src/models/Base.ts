@@ -20,39 +20,58 @@ import { NcError } from '~/helpers/catchError';
 
 const logger = new Logger('Base');
 
+/**
+ * Base 类 - 实现基础项目的核心功能
+ * 包括项目的创建、更新、删除、查询等操作
+ */
 export default class Base implements BaseType {
-  public id: string;
-  public fk_workspace_id?: string;
-  public title: string;
-  public prefix: string;
-  public status: string;
-  public description: string;
-  public meta: MetaType;
-  public color: string;
-  public deleted: BoolType | number;
-  public order: number;
-  public is_meta: boolean | number = false;
-  public sources?: Source[];
-  public linked_db_projects?: Base[];
+  // 基础属性定义
+  public id: string; // 项目ID
+  public fk_workspace_id?: string; // 工作空间ID
+  public title: string; // 项目标题
+  public prefix: string; // 项目前缀
+  public status: string; // 项目状态
+  public description: string; // 项目描述
+  public meta: MetaType; // 项目元数据
+  public color: string; // 项目颜色
+  public deleted: BoolType | number; // 删除标记
+  public order: number; // 排序顺序
+  public is_meta: boolean | number = false; // 是否为元数据项目
+  public sources?: Source[]; // 数据源列表
+  public linked_db_projects?: Base[]; // 关联的数据库项目
 
-  // shared base props
-  uuid?: string;
-  password?: string;
-  roles?: string;
-  fk_custom_url_id?: string;
+  // 共享基础属性
+  uuid?: string; // 唯一标识符
+  password?: string; // 密码
+  roles?: string; // 角色
+  fk_custom_url_id?: string; // 自定义URL ID
 
+  /**
+   * 构造函数 - 初始化基础项目
+   * @param base - 基础项目数据
+   */
   constructor(base: Partial<Base>) {
     Object.assign(this, base);
   }
 
+  /**
+   * 类型转换方法 - 将普通对象转换为Base实例
+   * @param base - 基础项目数据
+   */
   public static castType(base: Base): Base {
     return base && new Base(base);
   }
 
+  /**
+   * 创建新项目
+   * @param base - 项目数据
+   * @param ncMeta - 元数据服务实例
+   */
   public static async createProject(
     base: Partial<BaseType>,
     ncMeta = Noco.ncMeta,
   ): Promise<Base> {
+    // 提取需要插入的属性
     const insertObj = extractProps(base, [
       'id',
       'title',
@@ -65,20 +84,19 @@ export default class Base implements BaseType {
       'order',
     ]);
 
+    // 设置排序顺序
     if (!insertObj.order) {
-      // get order value
       insertObj.order = await ncMeta.metaGetNextOrder(MetaTable.PROJECT, {});
     }
 
-    // stringify meta
+    // 处理元数据
     if (insertObj.meta) {
       insertObj.meta = stringifyMetaProp(insertObj);
-    }
-    // set default meta if not present
-    else if (!('meta' in insertObj)) {
+    } else if (!('meta' in insertObj)) {
       insertObj.meta = '{"iconColor":"#36BFFF"}';
     }
 
+    // 插入项目数据
     const { id: baseId } = await ncMeta.metaInsert2(
       RootScopes.BASE,
       RootScopes.BASE,
@@ -86,11 +104,13 @@ export default class Base implements BaseType {
       insertObj,
     );
 
+    // 创建上下文
     const context = {
       workspace_id: (base as any).fk_workspace_id,
       base_id: baseId,
     };
 
+    // 创建数据源
     for (const source of base.sources) {
       await Source.createBase(
         context,
@@ -103,14 +123,18 @@ export default class Base implements BaseType {
       );
     }
 
+    // 清除缓存
     await NocoCache.del(CacheScope.INSTANCE_META);
 
+    // 授予基础权限
     await DataReflection.grantBase(base.fk_workspace_id, base.id, ncMeta);
 
+    // 清理命令面板缓存
     cleanCommandPaletteCache(context.workspace_id).catch(() => {
       logger.error('Failed to clean command palette cache');
     });
 
+    // 获取并返回项目信息
     return this.getWithInfo(context, baseId, true, ncMeta).then(
       async (base) => {
         await NocoCache.appendToList(
@@ -123,14 +147,21 @@ export default class Base implements BaseType {
     );
   }
 
+  /**
+   * 获取项目列表
+   * @param workspaceId - 工作空间ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async list(
     workspaceId?: string,
     ncMeta = Noco.ncMeta,
   ): Promise<Base[]> {
-    // todo: pagination
+    // 从缓存获取项目列表
     const cachedList = await NocoCache.getList(CacheScope.PROJECT, []);
     let { list: baseList } = cachedList;
     const { isNoneList } = cachedList;
+
+    // 如果缓存中没有数据，从数据库获取
     if (!isNoneList && !baseList.length) {
       baseList = await ncMeta.metaList2(
         RootScopes.BASE,
@@ -161,6 +192,7 @@ export default class Base implements BaseType {
 
     const promises = [];
 
+    // 处理项目列表
     const castedProjectList = baseList
       .filter(
         (p) => p.deleted === 0 || p.deleted === false || p.deleted === null,
@@ -181,18 +213,26 @@ export default class Base implements BaseType {
     return castedProjectList;
   }
 
-  // @ts-ignore
+  /**
+   * 获取单个项目
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async get(
     context: NcContext,
     baseId: string,
     ncMeta = Noco.ncMeta,
   ): Promise<Base> {
+    // 从缓存获取项目数据
     let baseData =
       baseId &&
       (await NocoCache.get(
         `${CacheScope.PROJECT}:${baseId}`,
         CacheGetType.TYPE_OBJECT,
       ));
+
+    // 如果缓存中没有数据，从数据库获取
     if (!baseData) {
       baseData = await ncMeta.metaGet2(
         context.workspace_id,
@@ -215,6 +255,11 @@ export default class Base implements BaseType {
     return this.castType(baseData);
   }
 
+  /**
+   * 获取项目的数据源
+   * @param includeConfig - 是否包含配置信息
+   * @param ncMeta - 元数据服务实例
+   */
   async getSources(
     includeConfig = true,
     ncMeta = Noco.ncMeta,
@@ -234,13 +279,20 @@ export default class Base implements BaseType {
     return sources;
   }
 
-  // @ts-ignore
+  /**
+   * 获取项目详细信息
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param includeConfig - 是否包含配置信息
+   * @param ncMeta - 元数据服务实例
+   */
   static async getWithInfo(
     context: NcContext,
     baseId: string,
     includeConfig = true,
     ncMeta = Noco.ncMeta,
   ): Promise<Base> {
+    // 从缓存获取项目数据
     let baseData =
       baseId &&
       (await NocoCache.get(
@@ -248,6 +300,7 @@ export default class Base implements BaseType {
         CacheGetType.TYPE_OBJECT,
       ));
 
+    // 如果缓存中没有数据，从数据库获取
     if (!baseData) {
       baseData = await ncMeta.metaGet2(
         context.workspace_id,
@@ -273,17 +326,22 @@ export default class Base implements BaseType {
         baseData = null;
       }
     }
+
+    // 获取项目数据源
     if (baseData) {
       const base = this.castType(baseData);
-
       await base.getSources(includeConfig, ncMeta);
-
       return base;
     }
     return null;
   }
 
-  // @ts-ignore
+  /**
+   * 软删除项目
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async softDelete(
     context: NcContext,
     baseId: string,
@@ -291,12 +349,11 @@ export default class Base implements BaseType {
   ): Promise<any> {
     const base = (await this.get(context, baseId, ncMeta)) as Base;
 
+    // 清理连接池
     await this.clearConnectionPool(context, baseId, ncMeta);
 
     if (base) {
-      // delete <scope>:<title>
-      // delete <scope>:<uuid>
-      // delete <scope>:ref:<titleOfId>
+      // 删除缓存
       await NocoCache.del([
         `${CacheScope.PROJECT_ALIAS}:${base.title}`,
         `${CacheScope.PROJECT_ALIAS}:${base.uuid}`,
@@ -307,23 +364,26 @@ export default class Base implements BaseType {
 
     await NocoCache.del(CacheScope.INSTANCE_META);
 
-    // remove item in cache list
+    // 从缓存列表中移除
     await NocoCache.deepDel(
       `${CacheScope.PROJECT}:${baseId}`,
       CacheDelDirection.CHILD_TO_PARENT,
     );
 
+    // 删除自定义URL
     CustomUrl.bulkDelete({ base_id: baseId }, ncMeta).catch(() => {
       logger.error(`Failed to delete custom urls of baseId: ${baseId}`);
     });
 
+    // 撤销基础权限
     await DataReflection.revokeBase(base.fk_workspace_id, base.id, ncMeta);
 
+    // 清理命令面板缓存
     cleanCommandPaletteCache(context.workspace_id).catch(() => {
       logger.error('Failed to clean command palette cache');
     });
 
-    // set meta
+    // 更新项目状态为已删除
     return await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -333,13 +393,20 @@ export default class Base implements BaseType {
     );
   }
 
-  // @ts-ignore
+  /**
+   * 更新项目
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param base - 更新数据
+   * @param ncMeta - 元数据服务实例
+   */
   static async update(
     context: NcContext,
     baseId: string,
     base: Partial<Base>,
     ncMeta = Noco.ncMeta,
   ): Promise<any> {
+    // 提取需要更新的属性
     const updateObj = extractProps(base, [
       'title',
       'prefix',
@@ -355,17 +422,16 @@ export default class Base implements BaseType {
       'roles',
     ]);
 
-    // stringify meta
+    // 处理元数据
     if (updateObj.meta) {
       updateObj.meta = stringifyMetaProp(updateObj);
     }
 
-    // get existing cache
+    // 更新缓存
     const key = `${CacheScope.PROJECT}:${baseId}`;
     let o = await NocoCache.get(key, CacheGetType.TYPE_OBJECT);
     if (o) {
-      // update data
-      // new uuid is generated
+      // 处理UUID变更
       if (o.uuid && updateObj.uuid && o.uuid !== updateObj.uuid) {
         await NocoCache.del(`${CacheScope.PROJECT_ALIAS}:${o.uuid}`);
         await NocoCache.set(
@@ -373,10 +439,11 @@ export default class Base implements BaseType {
           baseId,
         );
       }
-      // disable shared base
+      // 处理共享基础禁用
       if (o.uuid && updateObj.uuid === null) {
         await NocoCache.del(`${CacheScope.PROJECT_ALIAS}:${o.uuid}`);
       }
+      // 处理标题变更
       if (o.title && updateObj.title && o.title !== updateObj.title) {
         await NocoCache.del(`${CacheScope.PROJECT_ALIAS}:${o.title}`);
         await NocoCache.set(
@@ -387,19 +454,20 @@ export default class Base implements BaseType {
       o = { ...o, ...updateObj };
 
       await NocoCache.del(CacheScope.INSTANCE_META);
-
-      // set cache
       await NocoCache.set(key, o);
     }
+
+    // 清理命令面板缓存
     cleanCommandPaletteCache(context.workspace_id).catch(() => {
       logger.error('Failed to clean command palette cache');
     });
 
+    // 处理元数据
     if ('meta' in updateObj) {
       updateObj.meta = stringifyMetaProp(updateObj);
     }
 
-    // set meta
+    // 更新项目数据
     return await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -409,12 +477,18 @@ export default class Base implements BaseType {
     );
   }
 
-  // Todo: Remove the base entry from the connection pool in NcConnectionMgrv2
+  /**
+   * 删除项目
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async delete(
     context: NcContext,
     baseId,
     ncMeta = Noco.ncMeta,
   ): Promise<any> {
+    // 获取项目数据
     const base = await ncMeta.metaGet2(
       context.workspace_id,
       context.base_id,
@@ -426,6 +500,7 @@ export default class Base implements BaseType {
       NcError.baseNotFound(baseId);
     }
 
+    // 删除项目用户
     const users = await BaseUser.getUsersList(
       context,
       {
@@ -439,6 +514,7 @@ export default class Base implements BaseType {
       await BaseUser.delete(context, baseId, user.id, ncMeta);
     }
 
+    // 删除数据源
     const sources = await Source.list(
       context,
       { baseId, includeDeleted: true },
@@ -448,12 +524,11 @@ export default class Base implements BaseType {
       await source.delete(context, ncMeta);
     }
 
+    // 撤销基础权限
     await DataReflection.revokeBase(base.fk_workspace_id, base.id, ncMeta);
 
     if (base) {
-      // delete <scope>:<uuid>
-      // delete <scope>:<title>
-      // delete <scope>:ref:<titleOfId>
+      // 删除缓存
       await NocoCache.del([
         `${CacheScope.PROJECT_ALIAS}:${base.uuid}`,
         `${CacheScope.PROJECT_ALIAS}:${base.title}`,
@@ -462,11 +537,13 @@ export default class Base implements BaseType {
       ]);
     }
 
+    // 从缓存中删除
     await NocoCache.deepDel(
       `${CacheScope.PROJECT}:${baseId}`,
       CacheDelDirection.CHILD_TO_PARENT,
     );
 
+    // 删除审计日志
     await ncMeta.metaDelete(
       context.workspace_id,
       context.base_id,
@@ -476,14 +553,17 @@ export default class Base implements BaseType {
       },
     );
 
+    // 删除自定义URL
     CustomUrl.bulkDelete({ base_id: baseId }, ncMeta).catch(() => {
       logger.error(`Failed to delete custom urls of baseId: ${baseId}`);
     });
 
+    // 清理命令面板缓存
     cleanCommandPaletteCache(context.workspace_id).catch(() => {
       logger.error('Failed to clean command palette cache');
     });
 
+    // 删除项目数据
     return await ncMeta.metaDelete(
       context.workspace_id,
       context.base_id,
@@ -492,7 +572,14 @@ export default class Base implements BaseType {
     );
   }
 
+  /**
+   * 通过UUID获取项目
+   * @param context - 上下文信息
+   * @param uuid - 项目UUID
+   * @param ncMeta - 元数据服务实例
+   */
   static async getByUuid(context: NcContext, uuid, ncMeta = Noco.ncMeta) {
+    // 从缓存获取项目ID
     const baseId =
       uuid &&
       (await NocoCache.get(
@@ -500,6 +587,8 @@ export default class Base implements BaseType {
         CacheGetType.TYPE_STRING,
       ));
     let baseData = null;
+
+    // 如果缓存中没有数据，从数据库获取
     if (!baseId) {
       baseData = await Noco.ncMeta.metaGet2(
         context.workspace_id,
@@ -522,6 +611,12 @@ export default class Base implements BaseType {
     return baseData?.id && this.get(context, baseData?.id, ncMeta);
   }
 
+  /**
+   * 通过标题获取项目详细信息
+   * @param context - 上下文信息
+   * @param title - 项目标题
+   * @param ncMeta - 元数据服务实例
+   */
   static async getWithInfoByTitle(
     context: NcContext,
     title: string,
@@ -531,15 +626,21 @@ export default class Base implements BaseType {
     if (base) {
       await base.getSources(false, ncMeta);
     }
-
     return base;
   }
 
+  /**
+   * 通过标题获取项目
+   * @param context - 上下文信息
+   * @param title - 项目标题
+   * @param ncMeta - 元数据服务实例
+   */
   static async getByTitle(
     context: NcContext,
     title: string,
     ncMeta = Noco.ncMeta,
   ) {
+    // 从缓存获取项目ID
     const baseId =
       title &&
       (await NocoCache.get(
@@ -547,6 +648,8 @@ export default class Base implements BaseType {
         CacheGetType.TYPE_STRING,
       ));
     let baseData = null;
+
+    // 如果缓存中没有数据，从数据库获取
     if (!baseId) {
       baseData = await ncMeta.metaGet2(
         context.workspace_id,
@@ -570,11 +673,18 @@ export default class Base implements BaseType {
     return baseData?.id && this.get(context, baseData?.id, ncMeta);
   }
 
+  /**
+   * 通过标题或ID获取项目
+   * @param context - 上下文信息
+   * @param titleOrId - 项目标题或ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async getByTitleOrId(
     context: NcContext,
     titleOrId: string,
     ncMeta = Noco.ncMeta,
   ) {
+    // 从缓存获取项目ID
     const baseId =
       titleOrId &&
       (await NocoCache.get(
@@ -582,6 +692,8 @@ export default class Base implements BaseType {
         CacheGetType.TYPE_STRING,
       ));
     let baseData = null;
+
+    // 如果缓存中没有数据，从数据库获取
     if (!baseId) {
       baseData = await ncMeta.metaGet2(
         context.workspace_id,
@@ -608,9 +720,7 @@ export default class Base implements BaseType {
       );
 
       if (baseData) {
-        // parse meta
         baseData.meta = parseMetaProp(baseData);
-
         await NocoCache.set(
           `${CacheScope.PROJECT_ALIAS}:ref:${titleOrId}`,
           baseData?.id,
@@ -622,22 +732,31 @@ export default class Base implements BaseType {
     return baseData?.id && this.get(context, baseData?.id, ncMeta);
   }
 
+  /**
+   * 通过标题或ID获取项目详细信息
+   * @param context - 上下文信息
+   * @param titleOrId - 项目标题或ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async getWithInfoByTitleOrId(
     context: NcContext,
     titleOrId: string,
     ncMeta = Noco.ncMeta,
   ) {
     const base = await this.getByTitleOrId(context, titleOrId, ncMeta);
-
     if (base) {
-      // parse meta
       base.meta = parseMetaProp(base);
       await base.getSources(false, ncMeta);
     }
-
     return base;
   }
 
+  /**
+   * 清理连接池
+   * @param context - 上下文信息
+   * @param baseId - 项目ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async clearConnectionPool(
     context: NcContext,
     baseId: string,

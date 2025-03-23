@@ -72,54 +72,66 @@ const requiredColumnsToRecreate = {
   [UITypes.Formula]: ['formula'],
 };
 
+/**
+ * Column 类 - 表示数据库中的列
+ * 实现了 ColumnType 接口
+ */
 export default class Column<T = any> implements ColumnType {
-  public fk_model_id: string;
-  public fk_workspace_id?: string;
-  public base_id: string;
-  public source_id: string;
+  // 列的基本属性
+  public fk_model_id: string; // 关联的模型ID
+  public fk_workspace_id?: string; // 工作区ID
+  public base_id: string; // 基础ID
+  public source_id: string; // 源ID
 
-  public column_name: string;
-  public title: string;
-  public description: string;
+  public column_name: string; // 列名
+  public title: string; // 标题
+  public description: string; // 描述
 
-  public uidt: UITypes;
-  public dt: string;
-  public np: string;
-  public ns: string;
-  public clen: string;
-  public cop: string;
-  public pk: boolean;
-  public pv: boolean;
-  public rqd: boolean;
-  public un: boolean;
-  public ct: string;
-  public ai: boolean;
-  public unique: boolean;
-  public cdf: string;
-  public cc: string;
-  public csn: string;
-  public dtx: string;
-  public dtxp: string;
-  public dtxs: string;
-  public au: boolean;
-  public system: boolean;
+  public uidt: UITypes; // UI数据类型
+  public dt: string; // 数据类型
+  public np: string; // 精度
+  public ns: string; // 刻度
+  public clen: string; // 字符长度
+  public cop: string; // 复制选项
+  public pk: boolean; // 是否为主键
+  public pv: boolean; // 是否为私有
+  public rqd: boolean; // 是否必填
+  public un: boolean; // 是否唯一
+  public ct: string; // 列类型
+  public ai: boolean; // 是否自增
+  public unique: boolean; // 是否唯一
+  public cdf: string; // 默认值
+  public cc: string; // 列约束
+  public csn: string; // 列序列名
+  public dtx: string; // 数据类型扩展
+  public dtxp: string; // 数据类型参数
+  public dtxs: string; // 数据类型大小
+  public au: boolean; // 是否自动更新
+  public system: boolean; // 是否为系统字段
 
-  public colOptions: T;
-  public model: Model;
+  public colOptions: T; // 列选项
+  public model: Model; // 关联的模型
 
-  public order: number;
+  public order: number; // 排序
+  public validate: any; // 验证规则
+  public meta: any; // 元数据
+  public asId?: string; // 别名ID
+  public readonly?: boolean; // 是否只读
 
-  public validate: any;
-  public meta: any;
-
-  public asId?: string;
-
-  public readonly?: boolean;
-
+  /**
+   * 构造函数
+   * @param data 列数据
+   */
   constructor(data: Partial<(ColumnType & { asId?: string }) | Column>) {
     Object.assign(this, data);
   }
 
+  /**
+   * 获取关联的模型
+   * @param context 上下文
+   * @param ncMeta 元数据服务
+   * @returns 模型实例
+   */
   public async getModel(
     context: NcContext,
     ncMeta = Noco.ncMeta,
@@ -133,6 +145,13 @@ export default class Column<T = any> implements ColumnType {
     );
   }
 
+  /**
+   * 插入新列
+   * @param context 上下文
+   * @param column 列数据
+   * @param ncMeta 元数据服务
+   * @returns 新创建的列
+   */
   public static async insert<T>(
     context: NcContext,
     column: Partial<T> & {
@@ -144,9 +163,10 @@ export default class Column<T = any> implements ColumnType {
     } & Pick<ColumnReqType, 'column_order'>,
     ncMeta = Noco.ncMeta,
   ) {
+    // 验证模型ID是否存在
     if (!column.fk_model_id) NcError.badRequest('Missing model id');
 
-    // TODO: fix type
+    // 提取列属性
     const insertObj = extractProps(column as any, [
       'id',
       'fk_model_id',
@@ -182,6 +202,7 @@ export default class Column<T = any> implements ColumnType {
       'readonly',
     ]);
 
+    // 设置列名和标题
     if (!insertObj.column_name) {
       insertObj.column_name = column.cn;
     }
@@ -190,22 +211,26 @@ export default class Column<T = any> implements ColumnType {
       insertObj.title = column._cn;
     }
 
+    // 处理元数据
     if (insertObj.meta && typeof insertObj.meta === 'object') {
       insertObj.meta = JSON.stringify(insertObj.meta);
     }
 
+    // 设置列顺序
     insertObj.order =
       column.order ??
       (await ncMeta.metaGetNextOrder(MetaTable.COLUMNS, {
         fk_model_id: column.fk_model_id,
       }));
 
+    // 处理验证规则
     if (column.validate) {
       if (typeof column.validate === 'string')
         insertObj.validate = column.validate;
       else insertObj.validate = JSON.stringify(column.validate);
     }
 
+    // 设置源ID
     if (!column.source_id) {
       const model = await Model.getByIdOrName(
         context,
@@ -215,7 +240,10 @@ export default class Column<T = any> implements ColumnType {
       insertObj.source_id = model.source_id;
     }
 
+    // 验证UI数据类型
     if (!column.uidt) throw new Error('UI Datatype not found');
+
+    // 插入列数据
     const row = await ncMeta.metaInsert2(
       context.workspace_id,
       context.base_id,
@@ -223,16 +251,20 @@ export default class Column<T = any> implements ColumnType {
       insertObj,
     );
 
+    // 获取创建的列
     const col = await this.get(context, { colId: row.id }, ncMeta);
 
+    // 更新缓存
     await NocoCache.appendToList(
       CacheScope.COLUMN,
       [column.fk_model_id],
       `${CacheScope.COLUMN}:${row.id}`,
     );
 
+    // 插入列选项
     await this.insertColOption(context, column, row.id, ncMeta);
 
+    // 将列添加到所有视图中
     await View.insertColumnToAllViews(
       context,
       {
@@ -253,20 +285,29 @@ export default class Column<T = any> implements ColumnType {
       ncMeta,
     );
 
+    // 清除单查询缓存
     await View.clearSingleQueryCache(context, column.fk_model_id, null, ncMeta);
 
     return col;
   }
 
+  /**
+   * 插入列选项
+   * @param context 上下文
+   * @param column 列数据
+   * @param colId 列ID
+   * @param ncMeta 元数据服务
+   */
   private static async insertColOption<T>(
     context,
     column: Partial<T> & { source_id?: string; [p: string]: any },
     colId,
     ncMeta = Noco.ncMeta,
   ) {
+    // 根据列类型插入不同的列选项
     switch (column.uidt || column.ui_data_type) {
       case UITypes.Lookup: {
-        // LookupColumn.insert()
+        // 插入查找列选项
         await LookupColumn.insert(
           context,
           {
@@ -279,12 +320,12 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.Rollup: {
+        // 插入汇总列选项
         await RollupColumn.insert(
           context,
           {
             fk_column_id: colId,
             fk_relation_column_id: column.fk_relation_column_id,
-
             fk_rollup_column_id: column.fk_rollup_column_id,
             rollup_function: column.rollup_function,
           },
@@ -294,29 +335,22 @@ export default class Column<T = any> implements ColumnType {
       }
       case UITypes.Links:
       case UITypes.LinkToAnotherRecord: {
+        // 插入链接列选项
         await LinkToAnotherRecordColumn.insert(
           context,
           {
             fk_column_id: colId,
-
-            // ref_db_alias
             type: column.type,
-            // db_type:
-
             fk_child_column_id: column.fk_child_column_id,
             fk_parent_column_id: column.fk_parent_column_id,
-
             fk_target_view_id: column.fk_target_view_id,
             fk_mm_model_id: column.fk_mm_model_id,
             fk_mm_child_column_id: column.fk_mm_child_column_id,
             fk_mm_parent_column_id: column.fk_mm_parent_column_id,
-
             ur: column.ur,
             dr: column.dr,
-
             fk_index_name: column.fk_index_name,
             fk_related_model_id: column.fk_related_model_id,
-
             virtual: column.virtual,
           },
           ncMeta,
@@ -324,6 +358,7 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.QrCode: {
+        // 插入二维码列选项
         await QrCodeColumn.insert(
           context,
           {
@@ -335,6 +370,7 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.Barcode: {
+        // 插入条形码列选项
         await BarcodeColumn.insert(
           context,
           {
@@ -347,6 +383,7 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.Button: {
+        // 插入按钮列选项
         await ButtonColumn.insert(context, {
           fk_column_id: colId,
           formula: column?.formula,
@@ -364,10 +401,10 @@ export default class Column<T = any> implements ColumnType {
           model: column.model,
           output_column_ids: column.output_column_ids,
         });
-
         break;
       }
       case UITypes.Formula: {
+        // 插入公式列选项
         await FormulaColumn.insert(
           context,
           {
@@ -382,6 +419,7 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.MultiSelect: {
+        // 插入多选列选项
         if (!column.colOptions?.options) {
           const bulkOptions = [];
           for (const [i, option] of column.dtxp?.split(',').entries() ||
@@ -398,23 +436,22 @@ export default class Column<T = any> implements ColumnType {
           const bulkOptions = [];
           for (const [i, option] of column.colOptions.options.entries() ||
             [].entries()) {
-            // Trim end of enum/set
             if (column.dt === 'enum' || column.dt === 'set') {
               option.title = option.title.trimEnd();
             }
             bulkOptions.push({
-              color: selectColors[i % selectColors.length], // in case color is not provided
+              color: selectColors[i % selectColors.length],
               ...option,
               fk_column_id: colId,
               order: i + 1,
             });
           }
-
           await SelectOption.bulkInsert(context, bulkOptions, ncMeta);
         }
         break;
       }
       case UITypes.SingleSelect: {
+        // 插入单选列选项
         if (!column.colOptions?.options) {
           const bulkOptions = [];
           for (const [i, option] of column.dtxp?.split(',').entries() ||
@@ -431,12 +468,11 @@ export default class Column<T = any> implements ColumnType {
           const bulkOptions = [];
           for (const [i, option] of column.colOptions.options.entries() ||
             [].entries()) {
-            // Trim end of enum/set
             if (column.dt === 'enum' || column.dt === 'set') {
               option.title = option.title.trimEnd();
             }
             bulkOptions.push({
-              color: selectColors[i % selectColors.length], // in case color is not provided
+              color: selectColors[i % selectColors.length],
               ...option,
               fk_column_id: colId,
               order: i + 1,
@@ -447,6 +483,7 @@ export default class Column<T = any> implements ColumnType {
         break;
       }
       case UITypes.LongText: {
+        // 插入长文本列选项
         if (column.meta?.[LongTextAiMetaProp] === true) {
           await AIColumn.insert(
             context,
@@ -464,65 +501,22 @@ export default class Column<T = any> implements ColumnType {
         }
         break;
       }
-
-      /*  default:
-        {
-          await ncMeta.metaInsert2(
-            context.workspace_id,
-            context.base_id,
-            'nc_col_props_v2',
-            {
-              column_id: model.column_id,
-
-              cn: model.cn,
-              // todo: decide type
-              uidt: model.uidt,
-              dt: model.dt,
-              np: model.np,
-              ns: model.ns,
-              clen: model.clen,
-              cop: model.cop,
-              pk: model.pk,
-              rqd: model.rqd,
-              un: model.un,
-              ct: model.ct,
-              ai: model.ai,
-              unique: model.unique,
-              ctf: model.ctf,
-              cc: model.cc,
-              csn: model.csn,
-              dtx: model.dtx,
-              dtxp: model.dtxp,
-              dtxs: model.dtxs,
-              au: model.au
-            }
-          );
-          if (
-            model.uidt === UITypes.MultiSelect ||
-            model.uidt === UITypes.SingleSelect
-          ) {
-            for (const option of model.dtxp.split(','))
-              await ncMeta.metaInsert2(
-                context.workspace_id,
-                context.base_id,
-                MetaTable.COL_SELECT_OPTIONS',
-                {
-                  column_id: colId,
-                  name: option
-                }
-              );
-          }
-        }
-        break;*/
     }
   }
 
+  /**
+   * 获取列选项
+   * @param context 上下文
+   * @param ncMeta 元数据服务
+   * @returns 列选项
+   */
   public async getColOptions<U = T>(
     context: NcContext,
     ncMeta = Noco.ncMeta,
   ): Promise<U> {
     let res: any;
 
+    // 根据列类型获取不同的列选项
     switch (this.uidt) {
       case UITypes.Lookup:
         res = await LookupColumn.read(context, this.id, ncMeta);
@@ -548,7 +542,7 @@ export default class Column<T = any> implements ColumnType {
       case UITypes.Button:
         res = await ButtonColumn.read(context, this.id, ncMeta);
 
-        // add default values if options are missing
+        // 添加默认值
         if (!res) {
           res = {
             type: 'url',
@@ -559,7 +553,6 @@ export default class Column<T = any> implements ColumnType {
             formula_raw: '',
           };
         }
-
         break;
       case UITypes.QrCode:
         res = await QrCodeColumn.read(context, this.id, ncMeta);
@@ -572,14 +565,18 @@ export default class Column<T = any> implements ColumnType {
           res = await AIColumn.read(context, this.id, ncMeta);
         }
         break;
-      // default:
-      //   res = await DbColumn.read(this.id);
-      //   break;
     }
     this.colOptions = res;
     return res;
   }
 
+  /**
+   * 加载关联的模型
+   * @param context 上下文
+   * @param force 是否强制重新加载
+   * @param ncMeta 元数据服务
+   * @returns 模型实例
+   */
   async loadModel(
     context: NcContext,
     force = false,
@@ -589,8 +586,6 @@ export default class Column<T = any> implements ColumnType {
       this.model = await Model.getByIdOrName(
         context,
         {
-          // source_id: this.base_id,
-          // db_alias: this.db_alias,
           id: this.fk_model_id,
         },
         ncMeta,
@@ -600,6 +595,13 @@ export default class Column<T = any> implements ColumnType {
     return this.model;
   }
 
+  /**
+   * 获取列列表
+   * @param context 上下文
+   * @param param 查询参数
+   * @param ncMeta 元数据服务
+   * @returns 列列表
+   */
   public static async list(
     context: NcContext,
     {
@@ -611,21 +613,25 @@ export default class Column<T = any> implements ColumnType {
     },
     ncMeta = Noco.ncMeta,
   ): Promise<Column[]> {
+    // 从缓存获取列列表
     const cachedList = await NocoCache.getList(CacheScope.COLUMN, [
       fk_model_id,
     ]);
     let { list: columnsList } = cachedList;
     const { isNoneList } = cachedList;
 
+    // 获取默认视图列
     const defaultViewColumns = fk_default_view_id
       ? await View.getColumns(context, fk_default_view_id, ncMeta)
       : [];
 
+    // 创建默认视图列映射
     const defaultViewColumnMap = defaultViewColumns.reduce((acc, col) => {
       acc[col.fk_column_id] = col;
       return acc;
     }, {});
 
+    // 如果缓存中没有数据，从数据库获取
     if (!isNoneList && !columnsList.length) {
       columnsList = await ncMeta.metaList2(
         context.workspace_id,
@@ -641,19 +647,23 @@ export default class Column<T = any> implements ColumnType {
         },
       );
 
+      // 解析元数据
       columnsList.forEach((column) => {
         column.meta = parseMetaProp(column);
       });
 
+      // 更新缓存
       await NocoCache.setList(CacheScope.COLUMN, [fk_model_id], columnsList);
     }
 
+    // 按顺序排序
     columnsList.sort(
       (a, b) =>
         (a.order != null ? a.order : Infinity) -
         (b.order != null ? b.order : Infinity),
     );
 
+    // 返回列列表
     return Promise.all(
       columnsList.map(async (m) => {
         if (defaultViewColumns.length) {
@@ -669,44 +679,15 @@ export default class Column<T = any> implements ColumnType {
         return column;
       }),
     );
-
-    /*const columns = ncMeta
-      .knex('nc_models_v2 as tab')
-      .select(
-        'col.id',
-        'col.cn',
-        'col._cn',
-        'col.uidt',
-        'rel.rel_cn',
-        'rel.ref_rel_cn',
-        'rel.id as rel_id'
-      )
-      .join('nc_columns_v2 as col', 'tab.id', 'col.model_id')
-      .leftJoin(
-        ncMeta
-          .knex('nc_col_relations_v2 as r')
-          .select(
-            'r.*',
-            'col1.cn as rel_cn',
-            'col1._cn as _rel_cn',
-            'col2.cn as ref_rel_cn',
-            'col2._cn as _ref_rel_cn'
-          )
-          .join('nc_columns_v2 as col1', 'col1.id', 'r.rel_column_id')
-          .join('nc_columns_v2 as col2', 'col2.id', 'r.ref_rel_column_id')
-          .as('rel'),
-        'col.id',
-        'rel.column_id'
-      )
-      .condition(condition)
-      .where({
-        'tab.source_id': source_id,
-        'tab.db_alias': db_alias
-      });
-
-    return columns.map(c => new Column(c));*/
   }
 
+  /**
+   * 获取单个列
+   * @param context 上下文
+   * @param param 查询参数
+   * @param ncMeta 元数据服务
+   * @returns 列实例
+   */
   public static async get<T = any>(
     context: NcContext,
     {
@@ -718,12 +699,15 @@ export default class Column<T = any> implements ColumnType {
     },
     ncMeta = Noco.ncMeta,
   ): Promise<Column<T>> {
+    // 从缓存获取列数据
     let colData =
       colId &&
       (await NocoCache.get(
         `${CacheScope.COLUMN}:${colId}`,
         CacheGetType.TYPE_OBJECT,
       ));
+    
+    // 如果缓存中没有，从数据库获取
     if (!colData) {
       colData = await ncMeta.metaGet2(
         context.workspace_id,
@@ -740,6 +724,8 @@ export default class Column<T = any> implements ColumnType {
         await NocoCache.set(`${CacheScope.COLUMN}:${colId}`, colData);
       }
     }
+
+    // 创建并返回列实例
     if (colData) {
       const column = new Column(colData);
       await column.getColOptions(
@@ -756,17 +742,22 @@ export default class Column<T = any> implements ColumnType {
 
   id: string;
 
+  /**
+   * 删除列
+   * @param context 上下文
+   * @param id 列ID
+   * @param ncMeta 元数据服务
+   */
   static async delete(context: NcContext, id, ncMeta = Noco.ncMeta) {
+    // 获取列信息
     const col = await this.get(context, { colId: id }, ncMeta);
 
-    // if column is not found, return
+    // 如果列不存在，直接返回
     if (!col) {
       return;
     }
 
-    // todo: or instead of delete reset related foreign key value to null and handle in BaseModel
-
-    // get qr code columns and delete
+    // 删除相关的二维码列
     {
       const qrCodeCols = await ncMeta.metaList2(
         context.workspace_id,
@@ -781,6 +772,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
+    // 删除相关的条形码列
     {
       const barcodeCols = await ncMeta.metaList2(
         context.workspace_id,
@@ -795,7 +787,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    // get lookup columns and delete
+    // 删除相关的查找列
     {
       const cachedList = await NocoCache.getList(CacheScope.COL_LOOKUP, [id]);
       let { list: lookups } = cachedList;
@@ -815,7 +807,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    // get rollup/links column and delete
+    // 删除相关的汇总列
     {
       const cachedList = await NocoCache.getList(CacheScope.COL_ROLLUP, [id]);
       let { list: rollups } = cachedList;
@@ -835,6 +827,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
+    // 处理按钮列
     {
       const cachedList = await NocoCache.getList(CacheScope.COLUMN, [
         col.fk_model_id,
@@ -881,6 +874,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
+    // 处理AI列
     {
       const cachedList = await NocoCache.getList(CacheScope.COLUMN, [
         col.fk_model_id,
@@ -913,9 +907,6 @@ export default class Column<T = any> implements ColumnType {
 
         if (!ai) continue;
 
-        /*
-          if prompt includes deleted column id {column_id}, add error and update
-        */
         if (ai.prompt && ai.prompt.match(/{column_id}/)) {
           ai.error = `Field '${col.title}' not found`;
           await AIColumn.update(context, aiCol.id, ai, ncMeta);
@@ -923,6 +914,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
+    // 处理公式列
     {
       const cachedList = await NocoCache.getList(CacheScope.COLUMN, [
         col.fk_model_id,
@@ -965,10 +957,10 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    //  if relation column check lookup and rollup and delete
+    // 处理关系列
     if (isLinksOrLTAR(col.uidt)) {
+      // 删除相关的查找列
       {
-        // get lookup columns using relation and delete
         const cachedList = await NocoCache.getList(CacheScope.COL_LOOKUP, [id]);
         let { list: lookups } = cachedList;
         const { isNoneList } = cachedList;
@@ -987,8 +979,8 @@ export default class Column<T = any> implements ColumnType {
         }
       }
 
+      // 删除相关的汇总列
       {
-        // get rollup columns using relation and delete
         const cachedList = await NocoCache.getList(CacheScope.COL_ROLLUP, [id]);
         let { list: rollups } = cachedList;
         const { isNoneList } = cachedList;
@@ -1008,7 +1000,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    // delete sorts
+    // 删除排序配置
     {
       const cachedList = await NocoCache.getList(CacheScope.SORT, [id]);
       let { list: sorts } = cachedList;
@@ -1029,7 +1021,8 @@ export default class Column<T = any> implements ColumnType {
         await Sort.delete(context, sort.id, ncMeta);
       }
     }
-    // delete filters
+
+    // 删除过滤配置
     {
       const cachedList = await NocoCache.getList(CacheScope.FILTER_EXP, [id]);
       let { list: filters } = cachedList;
@@ -1051,14 +1044,16 @@ export default class Column<T = any> implements ColumnType {
         await Filter.delete(context, filter.id, ncMeta);
       }
     }
+
+    // 删除所有父级过滤配置
     {
       await Filter.deleteAllByParentColumn(context, id, ncMeta);
     }
 
-    // Set Gallery & Kanban view `fk_cover_image_col_id` value to null
+    // 更新图库和看板视图的封面图片列ID
     await Column.deleteCoverImageColumnId(context, id, ncMeta);
 
-    // Delete from view columns
+    // 删除视图列
     let colOptionTableName = null;
     let cacheScopeName = null;
     switch (col.uidt) {
@@ -1104,6 +1099,7 @@ export default class Column<T = any> implements ColumnType {
         break;
     }
 
+    // 删除列选项
     if (colOptionTableName && cacheScopeName) {
       await ncMeta.metaDelete(
         context.workspace_id,
@@ -1119,7 +1115,7 @@ export default class Column<T = any> implements ColumnType {
       );
     }
 
-    // Delete from all view columns
+    // 删除所有视图列
     const viewColumnTables = [
       MetaTable.GRID_VIEW_COLUMNS,
       MetaTable.FORM_VIEW_COLUMNS,
@@ -1157,7 +1153,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    // Get LTAR columns in which current column is referenced as foreign key
+    // 获取引用当前列作为外键的LTAR列
     const ltarColumns = await ncMeta.metaList2(
       context.workspace_id,
       context.base_id,
@@ -1174,15 +1170,15 @@ export default class Column<T = any> implements ColumnType {
       },
     );
 
-    // Delete LTAR columns in which current column is referenced as foreign key
+    // 删除引用当前列作为外键的LTAR列
     for (const ltarColumn of ltarColumns) {
       await Column.delete(context, ltarColumn.fk_column_id, ncMeta);
     }
 
-    // Delete FileReference
+    // 删除文件引用
     await FileReference.bulkDelete(context, { fk_column_id: col.id }, ncMeta);
 
-    // Columns
+    // 删除列
     await ncMeta.metaDelete(
       context.workspace_id,
       context.base_id,
@@ -1194,12 +1190,20 @@ export default class Column<T = any> implements ColumnType {
       CacheDelDirection.CHILD_TO_PARENT,
     );
 
-    // on column delete, delete any optimised single query cache
+    // 清除单查询缓存
     {
       await View.clearSingleQueryCache(context, col.fk_model_id, null, ncMeta);
     }
   }
 
+  /**
+   * 更新列
+   * @param context 上下文
+   * @param colId 列ID
+   * @param column 更新数据
+   * @param skipFormulaInvalidate 是否跳过公式验证
+   * @param ncMeta 元数据服务
+   */
   static async update(
     context: NcContext,
     colId: string,
@@ -1207,16 +1211,16 @@ export default class Column<T = any> implements ColumnType {
     ncMeta = Noco.ncMeta,
     skipFormulaInvalidate = false,
   ) {
+    // 获取原有列
     const oldCol = await Column.get(context, { colId }, ncMeta);
     const requiredColAvail =
       !requiredColumnsToRecreate[oldCol.uidt] ||
       requiredColumnsToRecreate[oldCol.uidt].every((k) => column[k]);
 
+    // 根据列类型删除旧的列选项
     if (requiredColAvail) {
       switch (oldCol.uidt) {
         case UITypes.Lookup: {
-          // LookupColumn.insert()
-
           await ncMeta.metaDelete(
             context.workspace_id,
             context.base_id,
@@ -1367,6 +1371,8 @@ export default class Column<T = any> implements ColumnType {
         }
       }
     }
+
+    // 提取需要更新的属性
     const updateObj = extractProps(column, [
       'column_name',
       'title',
@@ -1397,13 +1403,14 @@ export default class Column<T = any> implements ColumnType {
       'readonly',
     ]);
 
+    // 处理验证规则
     if (column.validate) {
       if (typeof column.validate === 'string')
         updateObj.validate = column.validate;
       else updateObj.validate = JSON.stringify(column.validate);
     }
 
-    // get qr code columns and delete if target type is not supported by QR code column type
+    // 处理二维码和条形码列
     if (!AllowedColumnTypesForQrAndBarcodes.includes(updateObj.uidt)) {
       const qrCodeCols = await ncMeta.metaList2(
         context.workspace_id,
@@ -1428,6 +1435,8 @@ export default class Column<T = any> implements ColumnType {
         await Column.delete(context, barcodeCol.fk_column_id, ncMeta);
       }
     }
+
+    // 更新列顺序
     if (
       column.column_order &&
       column.column_order.order &&
@@ -1447,16 +1456,16 @@ export default class Column<T = any> implements ColumnType {
       );
     }
 
+    // 处理附件列
     if (
       column.uidt &&
       oldCol.uidt === UITypes.Attachment &&
       oldCol.uidt !== column.uidt
     ) {
-      // Set Gallery & Kanban view `fk_cover_image_col_id` value to null
       await Column.deleteCoverImageColumnId(context, colId, ncMeta);
     }
 
-    // set meta
+    // 更新列数据
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1465,22 +1474,23 @@ export default class Column<T = any> implements ColumnType {
       colId,
     );
 
+    // 更新缓存
     await NocoCache.update(
       `${CacheScope.COLUMN}:${colId}`,
       prepareForResponse(updateObj),
     );
 
-    // insert new col options only if existing colOption meta is deleted
+    // 插入新的列选项
     if (requiredColAvail)
       await this.insertColOption(context, column, colId, ncMeta);
 
-    // on column update, delete any optimised single query cache
+    // 清除单查询缓存
     await View.clearSingleQueryCache(context, oldCol.fk_model_id, null, ncMeta);
 
+    // 获取更新后的列
     const updatedColumn = await Column.get(context, { colId }, ncMeta);
     if (!skipFormulaInvalidate) {
-      // invalidate formula/button parsed-tree in which current column is used
-      // whenever a new request comes for that formula, it will be populated again
+      // 使引用当前列的公式/按钮的解析树失效
       getFormulasReferredTheColumn(
         context,
         {
@@ -1516,15 +1526,13 @@ export default class Column<T = any> implements ColumnType {
             }
           }
         })
-        // ignore the error and continue, if formula/button is no longer valid it will be captured in the next run
         .catch((err) => {
           logger.error(err);
         });
     }
 
-    // clear any related table cache if updating a FK column
+    // 清除相关表的缓存
     {
-      // Get LTAR columns in which current column is referenced as foreign key
       const ltarColumns = await ncMeta.metaList2(
         context.workspace_id,
         context.base_id,
@@ -1559,6 +1567,12 @@ export default class Column<T = any> implements ColumnType {
     }
   }
 
+  /**
+   * 更新公式列到新类型
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   */
   static async updateFormulaColumnToNewType(
     context: NcContext,
     {
@@ -1571,6 +1585,7 @@ export default class Column<T = any> implements ColumnType {
       ncMeta?: MetaService;
     },
   ) {
+    // 提取需要更新的属性
     const updateObj = extractProps(destinationColumn, [
       'column_name',
       'title',
@@ -1599,6 +1614,8 @@ export default class Column<T = any> implements ColumnType {
       'validate',
       'meta',
     ]);
+
+    // 更新列数据
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1606,6 +1623,8 @@ export default class Column<T = any> implements ColumnType {
       prepareForDb(updateObj),
       formulaColumn.id,
     );
+
+    // 删除公式列选项
     await ncMeta.metaDelete(
       context.workspace_id,
       context.base_id,
@@ -1614,13 +1633,16 @@ export default class Column<T = any> implements ColumnType {
         fk_column_id: formulaColumn.id,
       },
     );
+
+    // 删除目标列
     await ncMeta.metaDelete(
       context.workspace_id,
       context.base_id,
       MetaTable.COLUMNS,
       destinationColumn.id,
     );
-    // update the caches to reflect new columns
+
+    // 更新缓存
     await NocoCache.update(
       `${CacheScope.COLUMN}:${formulaColumn.id}`,
       prepareForResponse(updateObj),
@@ -1628,13 +1650,20 @@ export default class Column<T = any> implements ColumnType {
     await NocoCache.del(`${CacheScope.COLUMN}:${destinationColumn.id}`);
   }
 
+  /**
+   * 更新列别名
+   * @param context 上下文
+   * @param colId 列ID
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   */
   static async updateAlias(
     context: NcContext,
     colId: string,
     { title }: { title: string },
     ncMeta = Noco.ncMeta,
   ) {
-    // set meta
+    // 更新列标题
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1645,13 +1674,20 @@ export default class Column<T = any> implements ColumnType {
       colId,
     );
 
+    // 更新缓存
     await NocoCache.update(`${CacheScope.COLUMN}:${colId}`, { title });
 
+    // 获取列信息
     const column = await Column.get(context, { colId }, ncMeta);
 
+    // 清除单查询缓存
     await View.clearSingleQueryCache(context, column.fk_model_id, null, ncMeta);
   }
 
+  /**
+   * 获取验证规则
+   * @returns 验证规则对象
+   */
   public getValidators(): any {
     if (this.validate && typeof this.validate === 'string')
       try {
@@ -1660,10 +1696,22 @@ export default class Column<T = any> implements ColumnType {
     return null;
   }
 
+  /**
+   * 删除列
+   * @param context 上下文
+   * @param ncMeta 元数据服务
+   */
   async delete(context: NcContext, ncMeta = Noco.ncMeta) {
     return await Column.delete(context, this.id, ncMeta);
   }
 
+  /**
+   * 检查列名是否可用
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   * @returns 是否可用
+   */
   static async checkTitleAvailable(
     context: NcContext,
     {
@@ -1686,6 +1734,13 @@ export default class Column<T = any> implements ColumnType {
     ));
   }
 
+  /**
+   * 检查别名是否可用
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   * @returns 是否可用
+   */
   static async checkAliasAvailable(
     context: NcContext,
     { title, fk_model_id, exclude_id }: { title; fk_model_id; exclude_id? },
@@ -1704,13 +1759,20 @@ export default class Column<T = any> implements ColumnType {
     ));
   }
 
+  /**
+   * 标记为系统字段
+   * @param context 上下文
+   * @param colId 列ID
+   * @param system 是否为系统字段
+   * @param ncMeta 元数据服务
+   */
   static async markAsSystemField(
     context: NcContext,
     colId: string,
     system = true,
     ncMeta = Noco.ncMeta,
   ) {
-    // update system field in meta db
+    // 更新系统字段标记
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1721,12 +1783,17 @@ export default class Column<T = any> implements ColumnType {
       colId,
     );
 
+    // 更新缓存
     await NocoCache.update(`${CacheScope.COLUMN}:${colId}`, { system });
   }
 
+  /**
+   * 获取最大列名长度
+   * @param sqlClientType SQL客户端类型
+   * @returns 最大长度
+   */
   static getMaxColumnNameLength(sqlClientType: string) {
-    // no limit for sqlite but set as 255
-    let fieldLengthLimit = 255;
+    let fieldLengthLimit = 255; // SQLite默认限制
     if (sqlClientType === 'mysql2' || sqlClientType === 'mysql') {
       fieldLengthLimit = 64;
     } else if (sqlClientType === 'pg') {
@@ -1737,12 +1804,18 @@ export default class Column<T = any> implements ColumnType {
     return fieldLengthLimit;
   }
 
+  /**
+   * 更新列元数据
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   */
   static async updateMeta(
     context: NcContext,
     { colId, meta }: { colId: string; meta: any },
     ncMeta = Noco.ncMeta,
   ) {
-    // set meta
+    // 更新元数据
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1751,18 +1824,25 @@ export default class Column<T = any> implements ColumnType {
       colId,
     );
 
+    // 更新缓存
     await NocoCache.update(
       `${CacheScope.COLUMN}:${colId}`,
       prepareForResponse({ meta }),
     );
   }
 
+  /**
+   * 更新验证规则
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   */
   static async updateValidation(
     context: NcContext,
     { colId, validate }: { colId: string; validate: any },
     ncMeta = Noco.ncMeta,
   ) {
-    // set meta
+    // 更新验证规则
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1771,14 +1851,22 @@ export default class Column<T = any> implements ColumnType {
       colId,
     );
 
+    // 更新缓存
     await NocoCache.update(`${CacheScope.COLUMN}:${colId}`, { validate });
   }
 
+  /**
+   * 更新目标视图
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   */
   static async updateTargetView(
     context: NcContext,
     { colId, fk_target_view_id }: { colId: string; fk_target_view_id: string },
     ncMeta = Noco.ncMeta,
   ) {
+    // 更新目标视图
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1791,11 +1879,19 @@ export default class Column<T = any> implements ColumnType {
       },
     );
 
+    // 更新缓存
     await NocoCache.update(`${CacheScope.COL_RELATION}:${colId}`, {
       fk_target_view_id,
     });
   }
 
+  /**
+   * 批量插入列
+   * @param context 上下文
+   * @param param 参数
+   * @param ncMeta 元数据服务
+   * @returns 插入的列列表
+   */
   static async bulkInsert(
     context: NcContext,
     param: {
@@ -1809,9 +1905,9 @@ export default class Column<T = any> implements ColumnType {
     const extractedColumnMetas = [];
     const columns = [];
 
-    // add fk_model_id
+    // 为每个列添加模型ID
     for (const column of param.columns) {
-      // pre-populate column meta to use while inserting colOptions
+      // 预填充列元数据
       const id = await ncMeta.genNanoid(MetaTable.COLUMNS);
       const colWithId = {
         ...column,
@@ -1821,6 +1917,7 @@ export default class Column<T = any> implements ColumnType {
         fk_model_id: param.fk_model_id,
       };
 
+      // 提取列属性
       const insertObj = extractProps(colWithId as any, [
         'id',
         'fk_model_id',
@@ -1855,10 +1952,12 @@ export default class Column<T = any> implements ColumnType {
         'readonly',
       ]);
 
+      // 处理元数据
       if (column.meta && typeof column.meta === 'object') {
         insertObj.meta = JSON.stringify(column.meta);
       }
 
+      // 处理验证规则
       if (column.validate) {
         if (typeof column.validate === 'string')
           insertObj.validate = column.validate;
@@ -1871,7 +1970,7 @@ export default class Column<T = any> implements ColumnType {
 
     if (columns.length === 0) return [];
 
-    // bulk insert columns
+    // 批量插入列
     await ncMeta.bulkMetaInsert(
       context.workspace_id,
       context.base_id,
@@ -1880,11 +1979,18 @@ export default class Column<T = any> implements ColumnType {
       true,
     );
 
+    // 批量插入列选项
     await Column.bulkInsertColOption(context, columns, ncMeta);
 
     return columns;
   }
 
+  /**
+   * 批量插入列选项
+   * @param context 上下文
+   * @param columns 列列表
+   * @param ncMeta 元数据服务
+   */
   private static async bulkInsertColOption<T>(
     context: NcContext,
     columns: (Partial<T> & { source_id?: string; [p: string]: any })[],
@@ -1892,6 +1998,7 @@ export default class Column<T = any> implements ColumnType {
   ) {
     const insertGroups = new Map<UITypes, Record<string, any>[]>();
 
+    // 根据列类型分组
     for (const column of columns) {
       const groupKey =
         column.uidt === UITypes.MultiSelect
@@ -1901,9 +2008,10 @@ export default class Column<T = any> implements ColumnType {
       if (!insertArr) {
         insertGroups.set(groupKey, (insertArr = []));
       }
+
+      // 根据列类型处理不同的列选项
       switch (column.uidt || column.ui_data_type) {
         case UITypes.Lookup:
-          // LookupColumn.insert()
           insertArr.push({
             fk_column_id: column.id,
             fk_relation_column_id: column.fk_relation_column_id,
@@ -1915,7 +2023,6 @@ export default class Column<T = any> implements ColumnType {
           insertArr.push({
             fk_column_id: column.id,
             fk_relation_column_id: column.fk_relation_column_id,
-
             fk_rollup_column_id: column.fk_rollup_column_id,
             rollup_function: column.rollup_function,
           });
@@ -1926,20 +2033,15 @@ export default class Column<T = any> implements ColumnType {
           insertArr.push({
             fk_column_id: column.id,
             type: column.type,
-
             fk_child_column_id: column.fk_child_column_id,
             fk_parent_column_id: column.fk_parent_column_id,
-
             fk_mm_model_id: column.fk_mm_model_id,
             fk_mm_child_column_id: column.fk_mm_child_column_id,
             fk_mm_parent_column_id: column.fk_mm_parent_column_id,
-
             ur: column.ur,
             dr: column.dr,
-
             fk_index_name: column.fk_index_name,
             fk_related_model_id: column.fk_related_model_id,
-
             virtual: column.virtual,
           });
           break;
@@ -1985,12 +2087,11 @@ export default class Column<T = any> implements ColumnType {
           } else {
             for (const [i, option] of column.colOptions.options.entries() ||
               [].entries()) {
-              // Trim end of enum/set
               if (column.dt === 'enum' || column.dt === 'set') {
                 option.title = option.title.trimEnd();
               }
               insertArr.push({
-                color: selectColors[i % selectColors.length], // in case color is not provided
+                color: selectColors[i % selectColors.length],
                 ...extractProps(option, ['title', 'fk_column_id', 'color']),
                 fk_column_id: column.id,
                 order: i + 1,
@@ -2013,12 +2114,11 @@ export default class Column<T = any> implements ColumnType {
           } else {
             for (const [i, option] of column.colOptions.options.entries() ||
               [].entries()) {
-              // Trim end of enum/set
               if (column.dt === 'enum' || column.dt === 'set') {
                 option.title = option.title.trimEnd();
               }
               insertArr.push({
-                color: selectColors[i % selectColors.length], // in case color is not provided
+                color: selectColors[i % selectColors.length],
                 ...extractProps(option, ['title', 'fk_column_id', 'color']),
                 fk_column_id: column.id,
                 order: i + 1,
@@ -2044,7 +2144,7 @@ export default class Column<T = any> implements ColumnType {
       }
     }
 
-    // bulk insert column options
+    // 批量插入列选项
     for (const group of insertGroups.keys()) {
       switch (group) {
         case UITypes.SingleSelect:
@@ -2119,6 +2219,12 @@ export default class Column<T = any> implements ColumnType {
     }
   }
 
+  /**
+   * 删除封面图片列ID
+   * @param context 上下文
+   * @param id 列ID
+   * @param ncMeta 元数据服务
+   */
   private static async deleteCoverImageColumnId(
     context: NcContext,
     id: string,
@@ -2126,7 +2232,7 @@ export default class Column<T = any> implements ColumnType {
   ) {
     const promises = [];
 
-    // Gallery views
+    // 更新图库视图
     const galleryViews: GalleryView[] = await ncMeta.metaList2(
       context.workspace_id,
       context.base_id,
@@ -2151,7 +2257,7 @@ export default class Column<T = any> implements ColumnType {
       );
     }
 
-    // Kanban views
+    // 更新看板视图
     const kanbanViews: KanbanView[] = await ncMeta.metaList2(
       context.workspace_id,
       context.base_id,
@@ -2176,6 +2282,7 @@ export default class Column<T = any> implements ColumnType {
       );
     }
 
+    // 等待所有更新完成
     await Promise.all(promises);
   }
 }

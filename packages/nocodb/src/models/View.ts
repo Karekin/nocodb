@@ -64,37 +64,47 @@ const { v4: uuidv4 } = require('uuid');
 const logger = new Logger('View');
 
 /*
-type ViewColumn =
-  | GridViewColumn
-  | FormViewColumn
-  | GalleryViewColumn
-  | KanbanViewColumn
-  | CalendarViewColumn
-  | MapViewColumn;
-
-type ViewColumnEnrichedWithTitleAndName = ViewColumn & {
-  title: string;
-  name: string;
-  dt: string;
-};
-*/
+ * 视图列的类型定义
+ * 可以是以下任意一种视图的列类型：
+ * - GridViewColumn: 网格视图列
+ * - FormViewColumn: 表单视图列
+ * - GalleryViewColumn: 图库视图列
+ * - KanbanViewColumn: 看板视图列
+ * - CalendarViewColumn: 日历视图列
+ * - MapViewColumn: 地图视图列
+ */
 
 export default class View implements ViewType {
+  // 视图的唯一标识符
   id?: string;
+  // 视图的标题
   title: string;
+  // 视图的描述信息
   description?: string;
+  // 视图的UUID
   uuid?: string;
+  // 视图的访问密码
   password?: string;
+  // 视图是否显示
   show: boolean;
+  // 是否为默认视图
   is_default: boolean;
+  // 视图的排序顺序
   order: number;
+  // 视图类型（网格、表单、看板等）
   type: ViewTypes;
+  // 视图的锁定类型
   lock_type?: ViewType['lock_type'];
+  // 创建者的ID
   created_by?: string;
+  // 所有者的ID
   owned_by?: string;
 
+  // 关联的数据模型ID
   fk_model_id: string;
+  // 关联的数据模型对象
   model?: Model;
+  // 视图的具体配置，可以是以下任意一种视图类型
   view?:
     | FormView
     | GridView
@@ -102,6 +112,7 @@ export default class View implements ViewType {
     | GalleryView
     | MapView
     | CalendarView;
+  // 视图的列配置数组
   columns?: Array<
     | FormViewColumn
     | GridViewColumn
@@ -111,13 +122,21 @@ export default class View implements ViewType {
     | CalendarViewColumn
   >;
 
+  // 视图的排序规则数组
   sorts: Sort[];
+  // 视图的过滤条件
   filter: Filter;
+  // 工作空间ID
   fk_workspace_id?: string;
+  // 基础ID
   base_id?: string;
+  // 源ID
   source_id?: string;
+  // 是否显示系统字段
   show_system_fields?: boolean;
+  // 视图的元数据
   meta?: any;
+  // 自定义URL的ID
   fk_custom_url_id?: string;
 
   constructor(data: View) {
@@ -724,66 +743,91 @@ export default class View implements ViewType {
     }
   }
 
+  /**
+   * 获取日历视图的范围列ID数组
+   * @param context - 上下文对象
+   * @param viewId - 视图ID
+   * @param ncMeta - 元数据对象
+   * @returns 返回日历范围列的ID数组
+   */
   static async getRangeColumnsAsArray(
     context: NcContext,
     viewId: string,
     ncMeta,
   ) {
+    // 读取日历范围配置
     const calRange = await CalendarRange.read(context, viewId, ncMeta);
     if (calRange) {
+      // 使用Set去重存储列ID
       const calIds: Set<string> = new Set();
+      // 遍历所有范围配置，收集列ID
       calRange.ranges.forEach((range) => {
         calIds.add(range.fk_from_column_id);
       });
+      // 将Set转换为数组返回
       return Array.from(calIds) as Array<string>;
     }
     return [];
   }
 
+  /**
+   * 向所有视图插入新列
+   * @param context - 上下文对象
+   * @param param - 列参数对象，包含列ID、模型ID、显示顺序等信息
+   * @param ncMeta - 元数据对象
+   */
   static async insertColumnToAllViews(
     context: NcContext,
     param: {
-      fk_column_id: any;
-      fk_model_id: any;
-      order?: number;
-      column_show: {
-        show: boolean;
-        view_id?: any;
+      fk_column_id: any;          // 列ID
+      fk_model_id: any;           // 模型ID
+      order?: number;             // 显示顺序
+      column_show: {              // 列显示配置
+        show: boolean;            // 是否显示
+        view_id?: any;            // 视图ID
       };
     } & Pick<ColumnReqType, 'column_order'>,
     ncMeta = Noco.ncMeta,
   ) {
+    // 构建插入对象
     const insertObj = {
       fk_column_id: param.fk_column_id,
       fk_model_id: param.fk_model_id,
       order: param.order,
       show: param.column_show.show,
     };
+    // 获取模型下的所有视图
     const views = await this.list(context, param.fk_model_id, ncMeta);
 
+    // 获取模型的所有列
     const tableColumns = await Column.list(
       context,
       { fk_model_id: param.fk_model_id },
       ncMeta,
     );
-    // keep a map of column id to column object for easy access
+    // 创建列ID到列对象的映射，方便快速访问
     const colIdMap = new Map(tableColumns.map((c) => [c.id, c]));
 
+    // 遍历所有视图，为每个视图添加新列
     for (const view of views) {
+      // 构建视图特定的插入对象
       const modifiedInsertObj = {
         ...insertObj,
         fk_view_id: view.id,
         source_id: view.source_id,
       };
 
+      // 根据不同的视图类型和条件设置列的显示状态
       if (colIdMap.get(param.fk_column_id)?.uidt === UITypes.Order) {
+        // 如果是排序列，默认不显示
         modifiedInsertObj.show = false;
       } else if (param.column_show?.view_id === view.id) {
+        // 如果指定了特定视图的显示状态，使用指定状态
         modifiedInsertObj.show = true;
       } else if (view.uuid) {
-        // if view is shared, then keep the show state as it is
+        // 如果是共享视图，保持原有显示状态
       }
-      // if gallery/kanban view, show only 3 columns(excluding system columns)
+      // 对于图库视图，最多显示3个非系统列
       else if (view.type === ViewTypes.GALLERY) {
         const visibleColumnsCount = (
           await GalleryViewColumn.list(context, view.id, ncMeta)
@@ -791,21 +835,27 @@ export default class View implements ViewType {
           (c) => c.show && !isSystemColumn(colIdMap.get(c.fk_column_id)),
         ).length;
         modifiedInsertObj.show = visibleColumnsCount < 3;
-      } else if (view.type === ViewTypes.KANBAN) {
+      } 
+      // 对于看板视图，最多显示3个非系统列
+      else if (view.type === ViewTypes.KANBAN) {
         const visibleColumnsCount = (
           await KanbanViewColumn.list(context, view.id, ncMeta)
         )?.filter(
           (c) => c.show && !isSystemColumn(colIdMap.get(c.fk_column_id)),
         ).length;
         modifiedInsertObj.show = visibleColumnsCount < 3;
-      } else if (view.type !== ViewTypes.FORM) {
+      } 
+      // 对于非表单视图，默认显示
+      else if (view.type !== ViewTypes.FORM) {
         modifiedInsertObj.show = true;
       }
 
+      // 如果指定了特定视图的列顺序，使用指定顺序
       if (param.column_order?.view_id === view.id) {
         modifiedInsertObj.order = param.column_order?.order;
       }
 
+      // 根据视图类型，调用相应的列插入方法
       switch (view.type) {
         case ViewTypes.GRID:
           await GridViewColumn.insert(context, modifiedInsertObj, ncMeta);
@@ -813,7 +863,6 @@ export default class View implements ViewType {
         case ViewTypes.GALLERY:
           await GalleryViewColumn.insert(context, modifiedInsertObj, ncMeta);
           break;
-
         case ViewTypes.MAP:
           await MapViewColumn.insert(
             context,
@@ -844,6 +893,21 @@ export default class View implements ViewType {
     }
   }
 
+  /**
+   * 向视图中插入新列
+   * @param context - 上下文信息
+   * @param param - 列参数对象，包含以下属性：
+   *   - view_id: 视图ID
+   *   - order: 列的顺序
+   *   - show: 是否显示列
+   *   - underline: 是否下划线
+   *   - bold: 是否加粗
+   *   - italic: 是否斜体
+   *   - fk_column_id: 关联的列ID
+   *   - id: 列ID（可选）
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回插入的列对象
+   */
   static async insertColumn(
     context: NcContext,
     param: {
@@ -859,12 +923,15 @@ export default class View implements ViewType {
       Partial<CalendarViewColumn>,
     ncMeta = Noco.ncMeta,
   ) {
+    // 获取视图对象
     const view = await this.get(context, param.view_id, ncMeta);
 
     let col;
+    // 根据视图类型调用相应的列插入方法
     switch (view.type) {
       case ViewTypes.GRID:
         {
+          // 网格视图列插入
           col = await GridViewColumn.insert(
             context,
             {
@@ -877,6 +944,7 @@ export default class View implements ViewType {
         break;
       case ViewTypes.GALLERY:
         {
+          // 图库视图列插入
           col = await GalleryViewColumn.insert(
             context,
             {
@@ -889,6 +957,7 @@ export default class View implements ViewType {
         break;
       case ViewTypes.MAP:
         {
+          // 地图视图列插入
           col = await MapViewColumn.insert(
             context,
             {
@@ -901,6 +970,7 @@ export default class View implements ViewType {
         break;
       case ViewTypes.FORM:
         {
+          // 表单视图列插入
           col = await FormViewColumn.insert(
             context,
             {
@@ -913,6 +983,7 @@ export default class View implements ViewType {
         break;
       case ViewTypes.KANBAN:
         {
+          // 看板视图列插入
           col = await KanbanViewColumn.insert(
             context,
             {
@@ -925,6 +996,7 @@ export default class View implements ViewType {
         break;
       case ViewTypes.CALENDAR:
         {
+          // 日历视图列插入
           col = await CalendarViewColumn.insert(
             context,
             {
@@ -940,12 +1012,21 @@ export default class View implements ViewType {
     return col;
   }
 
+  /**
+   * 获取带详细信息的视图列表
+   * @param context - 上下文信息
+   * @param id - 视图ID
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回包含详细信息的视图列表
+   */
   static async listWithInfo(
     context: NcContext,
     id: string,
     ncMeta = Noco.ncMeta,
   ) {
+    // 获取视图列表
     const list = await this.list(context, id, ncMeta);
+    // 遍历列表，为每个视图获取详细信息
     for (const item of list) {
       await item.getViewWithInfo(context, ncMeta);
     }
@@ -1360,11 +1441,19 @@ export default class View implements ViewType {
   }
 
   // todo: cache
+  /**
+   * 根据UUID获取视图
+   * @param context - 上下文信息
+   * @param uuid - 视图的UUID
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回视图对象
+   */
   static async getByUUID(
     context: NcContext,
     uuid: string,
     ncMeta = Noco.ncMeta,
   ) {
+    // 从元数据中获取视图
     const view = await ncMeta.metaGet2(
       context.workspace_id,
       context.base_id,
@@ -1374,20 +1463,31 @@ export default class View implements ViewType {
       },
     );
 
+    // 如果视图存在，解析其元数据
     if (view) {
       view.meta = parseMetaProp(view);
     }
 
+    // 返回视图对象
     return view && new View(view);
   }
 
+  /**
+   * 分享视图
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回更新后的视图对象
+   */
   static async share(context: NcContext, viewId, ncMeta = Noco.ncMeta) {
+    // 获取视图对象
     const view = await this.get(context, viewId);
+    // 如果视图没有UUID，生成一个新的UUID
     if (!view.uuid) {
       const uuid = uuidv4();
       view.uuid = uuid;
 
-      // set meta
+      // 更新视图的元数据
       await ncMeta.metaUpdate(
         context.workspace_id,
         context.base_id,
@@ -1398,10 +1498,12 @@ export default class View implements ViewType {
         viewId,
       );
 
+      // 更新缓存
       await NocoCache.update(`${CacheScope.VIEW}:${view.id}`, {
         uuid: view.uuid,
       });
     }
+    // 如果视图的元数据中没有允许CSV下载的属性，设置默认值
     if (!view.meta || !('allowCSVDownload' in view.meta)) {
       const defaultMeta = {
         ...(view.meta ?? {}),
@@ -1409,7 +1511,7 @@ export default class View implements ViewType {
       };
       view.meta = defaultMeta;
 
-      // set meta
+      // 更新视图的元数据
       await ncMeta.metaUpdate(
         context.workspace_id,
         context.base_id,
@@ -1420,6 +1522,7 @@ export default class View implements ViewType {
         viewId,
       );
 
+      // 更新缓存
       await NocoCache.update(
         `${CacheScope.VIEW}:${view.id}`,
         prepareForResponse({
@@ -1427,16 +1530,24 @@ export default class View implements ViewType {
         }),
       );
     }
+    // 返回更新后的视图对象
     return view;
   }
 
+  /**
+   * 更新视图的密码
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param password - 新密码
+   * @param ncMeta - 元数据服务实例
+   */
   static async passwordUpdate(
     context: NcContext,
     viewId: string,
     { password }: { password: string },
     ncMeta = Noco.ncMeta,
   ) {
-    // set meta
+    // 更新视图的元数据
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1447,17 +1558,24 @@ export default class View implements ViewType {
       viewId,
     );
 
+    // 更新缓存
     await NocoCache.update(`${CacheScope.VIEW}:${viewId}`, {
       password,
     });
   }
 
+  /**
+   * 删除共享视图
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param ncMeta - 元数据服务实例
+   */
   static async sharedViewDelete(
     context: NcContext,
     viewId,
     ncMeta = Noco.ncMeta,
   ) {
-    // set meta
+    // 更新视图的元数据，清除UUID
     await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1469,8 +1587,10 @@ export default class View implements ViewType {
       viewId,
     );
 
+    // 删除自定义URL
     await CustomUrl.delete({ view_id: viewId });
 
+    // 更新缓存，清除UUID
     await NocoCache.update(`${CacheScope.VIEW}:${viewId}`, {
       uuid: null,
       ...(isEE ? { fk_custom_url_id: null } : {}),
@@ -1709,45 +1829,59 @@ export default class View implements ViewType {
     );
   }
 
+  /**
+   * 显示所有列
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param ignoreColdIds - 忽略的列ID数组
+   * @param ncMeta - 元数据服务实例
+   */
   static async showAllColumns(
     context: NcContext,
     viewId,
     ignoreColdIds = [],
     ncMeta = Noco.ncMeta,
   ) {
+    // 获取视图对象
     const view = await this.get(context, viewId);
+    // 提取视图列的表名和缓存范围
     const table = this.extractViewColumnsTableName(view);
     const scope = this.extractViewColumnsTableNameScope(view);
 
+    // 获取模型的所有列
     const columns = await view
       .getModel(context, ncMeta)
       .then((meta) => meta.getColumns(context, ncMeta));
+    // 获取视图的列
     const viewColumns = await this.getColumns(context, viewId, ncMeta);
+    // 提取视图中可用的列ID
     const availableColumnsInView = viewColumns.map(
       (column) => column.fk_column_id,
     );
 
-    // get existing cache
+    // 获取现有缓存
     const cachedList = await NocoCache.getList(scope, [viewId]);
     const { list: dataList } = cachedList;
     const { isNoneList } = cachedList;
+    // 如果缓存中有数据，更新列的显示状态
     if (!isNoneList && dataList?.length) {
       for (const o of dataList) {
         if (!ignoreColdIds?.length || !ignoreColdIds.includes(o.fk_column_id)) {
-          // set data
+          // 设置列为可见
           o.show = true;
-          // set cache
+          // 更新缓存
           await NocoCache.set(`${scope}:${o.id}`, o);
         }
       }
     }
 
-    // insert or update view column
+    // 插入或更新视图列
     for (const col of columns) {
       if (ignoreColdIds?.includes(col.id)) continue;
 
       const colIndex = availableColumnsInView.indexOf(col.id);
       if (colIndex > -1) {
+        // 如果列已存在，更新其显示状态
         await this.updateColumn(
           context,
           viewId,
@@ -1756,6 +1890,7 @@ export default class View implements ViewType {
           ncMeta,
         );
       } else {
+        // 如果列不存在，插入新列
         await this.insertColumn(
           context,
           {
@@ -1769,38 +1904,29 @@ export default class View implements ViewType {
           ncMeta,
         );
       }
-
-      // return await ncMeta.metaUpdate(
-      // context.workspace_id,
-      // context.base_id,
-      //   table,
-      //   { show: true },
-      //   {
-      //     fk_view_id: viewId,
-      //   },
-      //   ignoreColdIds?.length
-      //     ? {
-      //         _not: {
-      //           fk_column_id: {
-      //             in: ignoreColdIds,
-      //           },
-      //         },
-      //       }
-      //     : null
-      // );
     }
   }
 
+  /**
+   * 隐藏所有列
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param ignoreColdIds - 忽略的列ID数组
+   * @param ncMeta - 元数据服务实例
+   */
   static async hideAllColumns(
     context: NcContext,
     viewId,
     ignoreColdIds = [],
     ncMeta = Noco.ncMeta,
   ) {
+    // 获取视图对象
     const view = await this.get(context, viewId, ncMeta);
+    // 提取视图列的表名和缓存范围
     const table = this.extractViewColumnsTableName(view);
     const scope = this.extractViewColumnsTableNameScope(view);
 
+    // 如果视图类型为网格，获取主值列
     if (view.type === ViewTypes.GRID) {
       const primary_value_column = await ncMeta.metaGet2(
         context.workspace_id,
@@ -1812,17 +1938,18 @@ export default class View implements ViewType {
         },
       );
 
-      // keep primary_value_column always visible
+      // 保持主值列始终可见
       if (primary_value_column) {
         ignoreColdIds.push(primary_value_column.id);
       }
     }
 
-    // get existing cache
+    // 获取现有缓存
     const cachedList = await NocoCache.getList(scope, [viewId]);
     const { list: dataList } = cachedList;
     const { isNoneList } = cachedList;
 
+    // 获取视图中必需的列
     const colsEssentialForView =
       view.type === ViewTypes.MAP
         ? [(await MapView.get(context, viewId, ncMeta)).fk_geo_data_col_id]
@@ -1830,20 +1957,21 @@ export default class View implements ViewType {
 
     const mergedIgnoreColdIds = [...ignoreColdIds, ...colsEssentialForView];
 
+    // 如果缓存中有数据，更新列的显示状态
     if (!isNoneList && dataList?.length) {
       for (const o of dataList) {
         if (
           !mergedIgnoreColdIds?.length ||
           !mergedIgnoreColdIds.includes(o.fk_column_id)
         ) {
-          // set data
+          // 设置列为不可见
           o.show = false;
-          // set cache
+          // 更新缓存
           await NocoCache.set(`${scope}:${o.id}`, o);
         }
       }
     }
-    // set meta
+    // 更新元数据
     return await ncMeta.metaUpdate(
       context.workspace_id,
       context.base_id,
@@ -1864,15 +1992,25 @@ export default class View implements ViewType {
     );
   }
 
+  /**
+   * 获取共享视图的路径
+   * @param context - 上下文信息
+   * @param viewId - 视图ID
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回共享视图的路径
+   */
   static async getSharedViewPath(
     context: NcContext,
     viewId,
     ncMeta = Noco.ncMeta,
   ) {
+    // 获取视图对象
     const view = await this.get(context, viewId, ncMeta);
+    // 如果视图没有UUID，返回null
     if (!view.uuid) return null;
 
     let viewType;
+    // 根据视图类型设置视图类型字符串
     switch (view.type) {
       case ViewTypes.FORM:
         viewType = 'form';
@@ -1893,6 +2031,7 @@ export default class View implements ViewType {
         viewType = 'view';
     }
 
+    // 返回编码后的共享视图路径
     return `${encodeURI(
       `/nc/${viewType}/${view.uuid}${
         parseProp(view.meta)?.surveyMode ? '/survey' : ''
@@ -1900,14 +2039,23 @@ export default class View implements ViewType {
     )}`;
   }
 
+  /**
+   * 获取共享视图列表
+   * @param context - 上下文信息
+   * @param tableId - 表ID
+   * @param ncMeta - 元数据服务实例
+   * @returns 返回共享视图列表
+   */
   static async shareViewList(
     context: NcContext,
     tableId,
     ncMeta = Noco.ncMeta,
   ) {
+    // 从缓存获取共享视图列表
     const cachedList = await NocoCache.getList(CacheScope.VIEW, [tableId]);
     let { list: sharedViews } = cachedList;
     const { isNoneList } = cachedList;
+    // 如果缓存中没有共享视图，查询数据库
     if (!isNoneList && !sharedViews.length) {
       sharedViews = await ncMeta.metaList2(
         context.workspace_id,
@@ -1926,9 +2074,12 @@ export default class View implements ViewType {
           },
         },
       );
+      // 更新缓存
       await NocoCache.setList(CacheScope.VIEW, [tableId], sharedViews);
     }
+    // 过滤掉没有UUID的视图
     sharedViews = sharedViews.filter((v) => v.uuid !== null);
+    // 返回共享视图对象列表
     return sharedViews?.map((v) => new View(v));
   }
 

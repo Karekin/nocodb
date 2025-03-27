@@ -52,6 +52,12 @@ export class TablesService {
     protected readonly columnsService: ColumnsService,
   ) {}
 
+  /**
+   * 更新表
+   * @param context 上下文
+   * @param param 参数对象，包含tableId、table、baseId、user和req
+   * @returns 成功返回true
+   */
   async tableUpdate(
     context: NcContext,
     param: {
@@ -62,23 +68,27 @@ export class TablesService {
       req: NcRequest;
     },
   ) {
+    // 获取模型
     const model = await Model.get(context, param.tableId);
 
+    // 获取基础信息
     const base = await Base.getWithInfo(
       context,
       param.table.base_id || param.baseId,
     );
+    // 查找对应的数据源
     const source = base.sources.find((b) => b.id === model.source_id);
 
+    // 检查模型是否属于基础
     if (model.base_id !== base.id) {
       NcError.badRequest('Model does not belong to base');
     }
 
-    // if meta/description present update and return
-    // todo: allow user to update meta  and other prop in single api call
+    // 如果只更新meta或description，则直接更新并返回
     if ('meta' in param.table || 'description' in param.table) {
       await Model.updateMeta(context, param.tableId, param.table);
 
+      // 触发表更新事件
       this.appHooksService.emit(AppEvents.TABLE_UPDATE, {
         table: param.table,
         prevTable: model,
@@ -89,37 +99,42 @@ export class TablesService {
       return true;
     }
 
-    // allow user to only update meta json data when source is restricted changes to schema
+    // 如果数据源是只读的，则不允许修改
     if (source?.is_schema_readonly) {
       NcError.sourceMetaReadOnly(source.alias);
     }
 
+    // 检查表名是否存在
     if (!param.table.table_name) {
       NcError.badRequest(
         'Missing table name `table_name` property in request body',
       );
     }
 
+    // 对于databricks类型的数据源，处理表名
     if (source.type === 'databricks') {
       param.table.table_name = param.table.table_name
         .replace(/\s/g, '_')
         .toLowerCase();
     }
 
+    // 处理元数据表的前缀
     if (source.isMeta(true) && base.prefix && !source.isMeta(true, 1)) {
       if (!param.table.table_name.startsWith(base.prefix)) {
         param.table.table_name = `${base.prefix}${param.table.table_name}`;
       }
     }
 
+    // 清理表名
     param.table.table_name = DOMPurify.sanitize(param.table.table_name);
 
-    // validate table name
+    // 验证表名，不允许前导或尾随空格
     if (/^\s+|\s+$/.test(param.table.table_name)) {
       NcError.badRequest(
         'Leading or trailing whitespace not allowed in table names',
       );
     }
+    // 检查特殊字符
     const specialCharRegex = /[./\\]/g;
     if (specialCharRegex.test(param.table.table_name)) {
       const match = param.table.table_name.match(specialCharRegex);
@@ -129,6 +144,7 @@ export class TablesService {
       );
     }
 
+    // 替换特定字符
     const replaceCharRegex = /[$?]/g;
     if (replaceCharRegex.test(param.table.table_name)) {
       param.table.table_name = param.table.table_name.replace(
@@ -137,6 +153,7 @@ export class TablesService {
       );
     }
 
+    // 检查表名是否可用
     if (
       !(await Model.checkTitleAvailable(context, {
         table_name: param.table.table_name,
@@ -147,6 +164,7 @@ export class TablesService {
       NcError.badRequest('Duplicate table name');
     }
 
+    // 如果没有提供标题，则使用表名别名
     if (!param.table.title) {
       param.table.title = getTableNameAlias(
         param.table.table_name,
@@ -155,6 +173,7 @@ export class TablesService {
       );
     }
 
+    // 检查别名是否可用
     if (
       !(await Model.checkAliasAvailable(context, {
         title: param.table.title,
@@ -165,9 +184,11 @@ export class TablesService {
       NcError.badRequest('Duplicate table alias');
     }
 
+    // 获取SQL管理器和SQL客户端
     const sqlMgr = await ProjectMgrv2.getSqlMgr(context, base);
     const sqlClient = await NcConnectionMgrv2.getSqlClient(source);
 
+    // 根据数据库类型设置表名长度限制
     let tableNameLengthLimit = 255;
     const sqlClientType = sqlClient.knex.clientType();
     if (sqlClientType === 'mysql2' || sqlClientType === 'mysql') {
@@ -178,12 +199,14 @@ export class TablesService {
       tableNameLengthLimit = 128;
     }
 
+    // 检查表名长度
     if (param.table.table_name.length > tableNameLengthLimit) {
       NcError.badRequest(
         `Table name exceeds ${tableNameLengthLimit} characters`,
       );
     }
 
+    // 执行表重命名操作
     await sqlMgr.sqlOpPlus(source, 'tableRename', {
       ...param.table,
       tn: param.table.table_name,
@@ -191,6 +214,7 @@ export class TablesService {
       schema: source.getConfig()?.schema,
     });
 
+    // 更新别名和表名
     await Model.updateAliasAndTableName(
       context,
       param.tableId,
@@ -198,6 +222,7 @@ export class TablesService {
       param.table.table_name,
     );
 
+    // 触发表更新事件
     this.appHooksService.emit(AppEvents.TABLE_UPDATE, {
       table: param.table,
       prevTable: model,
@@ -208,14 +233,23 @@ export class TablesService {
     return true;
   }
 
+  /**
+   * 重新排序表
+   * @param context 上下文
+   * @param param 参数对象，包含tableId、order和req
+   * @returns 更新结果
+   */
   async reorderTable(
     context: NcContext,
     param: { tableId: string; order: any; req: NcRequest },
   ) {
+    // 获取模型
     const model = await Model.get(context, param.tableId);
 
+    // 更新排序
     const res = await Model.updateOrder(context, param.tableId, param.order);
 
+    // 触发表更新事件
     this.appHooksService.emit(AppEvents.TABLE_UPDATE, {
       prevTable: model as TableType,
       table: {
@@ -229,6 +263,12 @@ export class TablesService {
     return res;
   }
 
+  /**
+   * 删除表
+   * @param context 上下文
+   * @param param 参数对象，包含tableId、user、forceDeleteRelations和req
+   * @returns 删除结果
+   */
   async tableDelete(
     context: NcContext,
     param: {
@@ -238,20 +278,22 @@ export class TablesService {
       req?: any;
     },
   ) {
+    // 获取表和列
     const table = await Model.getByIdOrName(context, { id: param.tableId });
     await table.getColumns(context);
 
+    // 如果是多对多关系表，则不允许删除
     if (table.mm) {
       const columns = await table.getColumns(context);
 
-      // get table names of the relation which uses the current table as junction table
+      // 获取使用当前表作为连接表的关系的表名
       const tables = await Promise.all(
         columns
           .filter((c) => isLinksOrLTAR(c))
           .map((c) => c.colOptions.getRelatedTable()),
       );
 
-      // get relation column names
+      // 获取关系列名
       const relColumns = await Promise.all(
         tables.map((t) => {
           return t.getColumns(context).then((cols) => {
@@ -268,11 +310,12 @@ export class TablesService {
         }),
       );
 
+      // 抛出错误，提示这是多对多表
       NcError.badRequest(
         `This is a many to many table for ${tables[0]?.title} (${relColumns[0]?.title}) & ${tables[1]?.title} (${relColumns[1]?.title}). You can disable "Show M2M tables" in base settings to avoid seeing this.`,
       );
     } else {
-      // if table is using in custom relation as junction table then delete all the relation
+      // 检查表是否在自定义关系中用作连接表
       const relations = await Noco.ncMeta.metaList2(
         table.fk_workspace_id,
         table.base_id,
@@ -284,6 +327,7 @@ export class TablesService {
         },
       );
 
+      // 如果有关系，则不允许删除
       if (relations.length) {
         const relCol = await Column.get(context, {
           colId: relations[0].fk_column_id,
@@ -295,13 +339,17 @@ export class TablesService {
       }
     }
 
+    // 获取基础和数据源
     const base = await Base.getWithInfo(context, table.base_id);
     const source = base.sources.find((b) => b.id === table.source_id);
 
+    // 获取关系列
     const relationColumns = table.columns.filter((c) => isLinksOrLTAR(c));
 
+    // 确定是否删除关系
     const deleteRelations = source.isMeta() || param.forceDeleteRelations;
 
+    // 如果有关系列且不允许删除关系，则抛出错误
     if (relationColumns?.length && !deleteRelations) {
       const referredTables = await Promise.all(
         relationColumns.map(async (c) =>
@@ -318,22 +366,23 @@ export class TablesService {
       );
     }
 
-    // start a transaction
+    // 开始事务
     const ncMeta = await (Noco.ncMeta as MetaService).startTransaction();
     let result;
     try {
-      // delete all relations
+      // 删除所有关系
       for (const c of relationColumns) {
-        // skip if column is hasmany relation to mm table
+        // 如果列是对多对多表的hasmany关系，则跳过
         if (c.system && !table.mm) {
           continue;
         }
 
-        // verify column exist or not and based on that delete the column
+        // 验证列是否存在，并基于此删除列
         if (!(await Column.get(context, { colId: c.id }, ncMeta))) {
           continue;
         }
 
+        // 删除列
         await this.columnsService.columnDelete(
           context,
           {
@@ -346,13 +395,16 @@ export class TablesService {
         );
       }
 
+      // 获取SQL管理器
       const sqlMgr = await ProjectMgrv2.getSqlMgr(context, base, ncMeta);
       (table as any).tn = table.table_name;
+      // 过滤掉虚拟列
       table.columns = table.columns.filter((c) => !isVirtualCol(c));
       table.columns.forEach((c) => {
         (c as any).cn = c.column_name;
       });
 
+      // 根据表类型执行不同的删除操作
       if (table.type === ModelTypes.TABLE) {
         await sqlMgr.sqlOpPlus(source, 'tableDelete', table);
       } else if (table.type === ModelTypes.VIEW) {
@@ -362,6 +414,7 @@ export class TablesService {
         });
       }
 
+      // 触发表删除事件
       this.appHooksService.emit(AppEvents.TABLE_DELETE, {
         table,
         user: param.user,
@@ -369,15 +422,24 @@ export class TablesService {
         context,
       });
 
+      // 删除表
       result = await table.delete(context, ncMeta);
+      // 提交事务
       await ncMeta.commit();
     } catch (e) {
+      // 回滚事务
       await ncMeta.rollback();
       throw e;
     }
     return result;
   }
 
+  /**
+   * 获取表及其可访问的视图
+   * @param context 上下文
+   * @param param 参数对象，包含tableId和user
+   * @returns 表及其视图
+   */
   async getTableWithAccessibleViews(
     context: NcContext,
     param: {
@@ -385,20 +447,22 @@ export class TablesService {
       user: User | UserType;
     },
   ) {
+    // 获取表信息
     const table = await Model.getWithInfo(context, {
       id: param.tableId,
     });
 
+    // 如果表不存在，则抛出错误
     if (!table) {
       NcError.tableNotFound(param.tableId);
     }
 
-    // todo: optimise
+    // 获取视图列表
     const viewList = <View[]>(
       await this.xcVisibilityMetaGet(context, table.base_id, [table])
     );
 
-    //await View.list(param.tableId)
+    // 过滤出用户可访问的视图
     table.views = viewList.filter((view: any) => {
       return Object.keys(param.user?.roles).some(
         (role) => param.user?.roles[role] && !view.disabled[role],
@@ -408,6 +472,14 @@ export class TablesService {
     return table;
   }
 
+  /**
+   * 获取可见性元数据
+   * @param context 上下文
+   * @param baseId 基础ID
+   * @param _models 模型数组
+   * @param includeM2M 是否包含多对多表
+   * @returns 可见性元数据
+   */
   async xcVisibilityMetaGet(
     context: NcContext,
     baseId,
@@ -415,7 +487,7 @@ export class TablesService {
     includeM2M = true,
     // type: 'table' | 'tableAndViews' | 'views' = 'table'
   ) {
-    // todo: move to
+    // 角色列表
     const roles = [
       'owner',
       'creator',
@@ -425,8 +497,10 @@ export class TablesService {
       'guest',
     ];
 
+    // 默认禁用状态
     const defaultDisabled = roles.reduce((o, r) => ({ ...o, [r]: false }), {});
 
+    // 获取模型列表
     let models =
       _models ||
       (await Model.list(context, {
@@ -434,11 +508,14 @@ export class TablesService {
         source_id: undefined,
       }));
 
+    // 根据includeM2M参数过滤模型
     models = includeM2M ? models : (models.filter((t) => !t.mm) as Model[]);
 
+    // 构建结果对象
     const result = await models.reduce(async (_obj, model) => {
       const obj = await _obj;
 
+      // 获取模型的视图
       const views = await model.getViews(context);
       for (const view of views) {
         obj[view.id] = {
@@ -456,8 +533,10 @@ export class TablesService {
       return obj;
     }, Promise.resolve({}));
 
+    // 获取禁用列表
     const disabledList = await ModelRoleVisibility.list(context, baseId);
 
+    // 更新禁用状态
     for (const d of disabledList) {
       if (result[d.fk_view_id])
         result[d.fk_view_id].disabled[d.role] = !!d.disabled;
@@ -466,6 +545,12 @@ export class TablesService {
     return Object.values(result);
   }
 
+  /**
+   * 获取可访问的表
+   * @param context 上下文
+   * @param param 参数对象，包含baseId、sourceId、includeM2M和roles
+   * @returns 可访问的表列表
+   */
   async getAccessibleTables(
     context: NcContext,
     param: {
@@ -475,9 +560,10 @@ export class TablesService {
       roles: Record<string, boolean>;
     },
   ) {
+    // 获取视图列表
     const viewList = await this.xcVisibilityMetaGet(context, param.baseId);
 
-    // todo: optimise
+    // 构建表视图映射
     const tableViewMapping = viewList.reduce((o, view: any) => {
       o[view.fk_model_id] = o[view.fk_model_id] || 0;
       if (
@@ -490,6 +576,7 @@ export class TablesService {
       return o;
     }, {});
 
+    // 获取表列表并过滤
     const tableList = (
       await Model.list(context, {
         base_id: param.baseId,
@@ -497,11 +584,18 @@ export class TablesService {
       })
     ).filter((t) => tableViewMapping[t.id]);
 
+    // 根据includeM2M参数返回结果
     return param.includeM2M
       ? tableList
       : (tableList.filter((t) => !t.mm) as Model[]);
   }
 
+  /**
+   * 创建表
+   * @param context 上下文
+   * @param param 参数对象，包含baseId、sourceId、table、user、req、synced和apiVersion
+   * @returns 创建的表
+   */
   async tableCreate(
     context: NcContext,
     param: {
@@ -514,7 +608,7 @@ export class TablesService {
       apiVersion?: NcApiVersion;
     },
   ) {
-    // before validating add title for columns if only column name is present
+    // 在验证前为列添加标题（如果只有列名）
     if (param.table.columns) {
       param.table.columns.forEach((c) => {
         if (!c.title && c.column_name) {
@@ -523,13 +617,15 @@ export class TablesService {
       });
     }
 
-    // before validating add title for table if only table name is present
+    // 在验证前为表添加标题（如果只有表名）
     if (!param.table.title && param.table.table_name) {
       param.table.title = param.table.table_name;
     }
 
+    // 验证负载
     validatePayload('swagger.json#/components/schemas/TableReq', param.table);
 
+    // 构建表创建负载
     const tableCreatePayLoad: Omit<TableReqType, 'columns'> & {
       columns: (ColumnType & { cn?: string })[];
     } = {
@@ -537,14 +633,16 @@ export class TablesService {
       ...(param.synced ? { synced: true } : {}),
     };
 
+    // 获取基础和数据源
     const base = await Base.getWithInfo(context, param.baseId);
     let source = base.sources[0];
 
+    // 如果指定了sourceId，则使用对应的数据源
     if (param.sourceId) {
       source = base.sources.find((b) => b.id === param.sourceId);
     }
 
-    // add CreatedTime and LastModifiedTime system columns if missing in request payload
+    // 添加系统列（如果请求负载中缺少）
     {
       for (const uidt of [
         ...(param.apiVersion === NcApiVersion.V3 ? [UITypes.ID] : []),
@@ -560,6 +658,7 @@ export class TablesService {
 
         let columnName, columnTitle;
 
+        // 根据UI类型设置列名和标题
         switch (uidt) {
           case UITypes.CreatedTime:
             columnName = 'created_at';
@@ -587,6 +686,7 @@ export class TablesService {
             break;
         }
 
+        // 获取唯一列名和别名
         const colName = getUniqueColumnName(
           tableCreatePayLoad.columns as any[],
           columnName,
@@ -597,6 +697,7 @@ export class TablesService {
           columnTitle,
         );
 
+        // 如果列不存在或不是系统列，则添加
         if (!col || (!col.system && col.uidt !== UITypes.ID)) {
           tableCreatePayLoad.columns.push({
             ...(await getColumnPropsFromUIDT({ uidt } as any, source)),
@@ -606,7 +707,7 @@ export class TablesService {
             system: uidt !== UITypes.ID,
           });
         } else {
-          // temporary fix for updating if user passed system columns with duplicate names
+          // 临时修复：更新用户传递的具有重复名称的系统列
           if (
             tableCreatePayLoad.columns.some(
               (c: ColumnType) =>
@@ -632,7 +733,7 @@ export class TablesService {
     }
 
     {
-      // set order of system columns in columns list
+      // 设置系统列在列表中的顺序
       const orderOfSystemColumns = [
         UITypes.ID,
         UITypes.CreatedTime,
@@ -642,6 +743,7 @@ export class TablesService {
         UITypes.Order,
       ];
 
+      // 对列进行排序
       tableCreatePayLoad.columns = tableCreatePayLoad.columns.sort((a, b) => {
         const aIndex =
           a.system || a.uidt === UITypes.ID
@@ -668,14 +770,17 @@ export class TablesService {
       });
     }
 
+    // 检查标题是否存在
     if (!tableCreatePayLoad.title) {
       NcError.badRequest('Missing table `title` property in request body');
     }
 
+    // 如果没有表名，则使用标题作为表名
     if (!tableCreatePayLoad.table_name) {
       tableCreatePayLoad.table_name = tableCreatePayLoad.title;
     }
 
+    // 检查别名是否可用
     if (
       !(await Model.checkAliasAvailable(context, {
         title: tableCreatePayLoad.title,
@@ -686,28 +791,32 @@ export class TablesService {
       NcError.badRequest('Duplicate table alias');
     }
 
+    // 对于databricks类型的数据源，处理表名
     if (source.type === 'databricks') {
       tableCreatePayLoad.table_name = tableCreatePayLoad.table_name
         .replace(/\s/g, '_')
         .toLowerCase();
     }
 
+    // 处理元数据表的前缀
     if (source.is_meta && base.prefix) {
       if (!tableCreatePayLoad.table_name.startsWith(base.prefix)) {
         tableCreatePayLoad.table_name = `${base.prefix}_${tableCreatePayLoad.table_name}`;
       }
     }
 
+    // 清理表名
     tableCreatePayLoad.table_name = DOMPurify.sanitize(
       tableCreatePayLoad.table_name,
     );
 
-    // validate table name
+    // 验证表名
     if (/^\s+|\s+$/.test(tableCreatePayLoad.table_name)) {
       NcError.badRequest(
         'Leading or trailing whitespace not allowed in table names',
       );
     }
+    // 检查特殊字符
     const specialCharRegex = /[./\\]/g;
     if (specialCharRegex.test(param.table.table_name)) {
       const match = param.table.table_name.match(specialCharRegex);
@@ -717,6 +826,7 @@ export class TablesService {
       );
     }
 
+    // 替换特定字符
     const replaceCharRegex = /[$?]/g;
     if (replaceCharRegex.test(param.table.table_name)) {
       tableCreatePayLoad.table_name = param.table.table_name.replace(
@@ -725,6 +835,7 @@ export class TablesService {
       );
     }
 
+    // 检查表名是否可用
     if (
       !(await Model.checkTitleAvailable(context, {
         table_name: tableCreatePayLoad.table_name,
@@ -735,6 +846,7 @@ export class TablesService {
       NcError.badRequest('Duplicate table name');
     }
 
+    // 如果没有提供标题，则使用表名别名
     if (!tableCreatePayLoad.title) {
       tableCreatePayLoad.title = getTableNameAlias(
         tableCreatePayLoad.table_name,
@@ -743,10 +855,11 @@ export class TablesService {
       );
     }
 
+    // 获取SQL管理器和SQL客户端
     const sqlMgr = await ProjectMgrv2.getSqlMgr(context, base);
-
     const sqlClient = await NcConnectionMgrv2.getSqlClient(source);
 
+    // 根据数据库类型设置表名长度限制
     let tableNameLengthLimit = 255;
     const sqlClientType = sqlClient.knex.clientType();
     if (sqlClientType === 'mysql2' || sqlClientType === 'mysql') {
@@ -757,37 +870,45 @@ export class TablesService {
       tableNameLengthLimit = 128;
     }
 
+    // 检查表名长度
     if (tableCreatePayLoad.table_name.length > tableNameLengthLimit) {
       NcError.badRequest(
         `Table name exceeds ${tableNameLengthLimit} characters`,
       );
     }
 
+    // 获取列名最大长度
     const mxColumnLength = Column.getMaxColumnNameLength(sqlClientType);
 
+    // 用于跟踪唯一列名的计数器
     const uniqueColumnNameCount = {};
 
+    // 映射默认显示值
     mapDefaultDisplayValue(param.table.columns);
 
+    // 存储虚拟列
     const virtualColumns = [];
 
+    // 处理每个列
     for (const column of param.table.columns) {
+      // 如果不是虚拟列或是系统时间/用户列
       if (
         !isVirtualCol(column) ||
         (isCreatedOrLastModifiedTimeCol(column) && (column as any).system) ||
         (isCreatedOrLastModifiedByCol(column) && (column as any).system)
       ) {
-        // set column name using title if not present
+        // 如果没有列名但有标题，则使用标题作为列名
         if (!column.column_name && column.title) {
           column.column_name = column.title;
         }
 
-        // - 5 is a buffer for suffix
+        // 清理列名并限制长度（-5是为后缀预留空间）
         column.column_name = sanitizeColumnName(
           column.column_name.slice(0, mxColumnLength - 5),
           source.type,
         );
 
+        // 确保列名唯一
         if (uniqueColumnNameCount[column.column_name]) {
           let suffix = 1;
           let targetColumnName = `${column.column_name}_${suffix++}`;
@@ -798,11 +919,13 @@ export class TablesService {
         }
         uniqueColumnNameCount[column.column_name] = 1;
 
+        // 确保列名不超过最大长度
         if (column.column_name.length > mxColumnLength) {
           column.column_name = column.column_name.slice(0, mxColumnLength);
         }
       }
 
+      // 检查列标题长度
       if (column.title && column.title.length > 255) {
         NcError.badRequest(
           `Column title ${column.title} exceeds 255 characters`,
@@ -810,9 +933,10 @@ export class TablesService {
       }
     }
 
+    // 处理表创建负载的列
     tableCreatePayLoad.columns = await Promise.all(
       param.table.columns
-        // exclude alias columns from column list
+        // 从列列表中排除别名列
         ?.filter((c) => {
           const allowed =
             (!isCreatedOrLastModifiedTimeCol(c) &&
@@ -820,6 +944,7 @@ export class TablesService {
             (c as any).system ||
             isOrderCol(c);
 
+          // 如果不允许，则添加到虚拟列
           if (!allowed) {
             virtualColumns.push(c);
           }
@@ -833,11 +958,13 @@ export class TablesService {
         })),
     );
 
+    // 执行表创建操作
     await sqlMgr.sqlOpPlus(source, 'tableCreate', {
       ...tableCreatePayLoad,
       tn: tableCreatePayLoad.table_name,
     });
 
+    // 定义列类型
     let columns: Array<
       Omit<Column, 'column_name' | 'title'> & {
         cn: string;
@@ -845,6 +972,7 @@ export class TablesService {
       }
     >;
 
+    // 如果不是元数据源，则获取列列表
     if (!source.isMeta()) {
       columns = (
         await sqlMgr.sqlOpPlus(source, 'columnList', {
@@ -854,15 +982,17 @@ export class TablesService {
       )?.data?.list;
     }
 
+    // 获取表列表
     const tables = await Model.list(context, {
       base_id: base.id,
       source_id: source.id,
     });
 
-    // todo: type correction
+    // 插入模型
     const result = await Model.insert(context, base.id, source.id, {
       ...tableCreatePayLoad,
       columns: [
+        // 映射表创建负载的列
         ...tableCreatePayLoad.columns.map((c, i) => {
           const colMetaFromDb = columns?.find((c1) => c.cn === c1.cn);
           return {
@@ -875,6 +1005,7 @@ export class TablesService {
             readonly: c.readonly || false,
           } as NormalColumnRequestType;
         }),
+        // 映射虚拟列
         ...virtualColumns.map((c, i) => ({
           ...c,
           uidt: c.uidt || getColumnUiType(source, c),
@@ -882,11 +1013,12 @@ export class TablesService {
           order: tableCreatePayLoad.columns.length + i + 1,
         })),
       ],
+      // 设置顺序
       order: +(tables?.pop()?.order ?? 0) + 1,
     } as any);
 
     try {
-      // create nc_order index column
+      // 创建nc_order索引列
       const metaOrderColumn = tableCreatePayLoad.columns.find(
         (c) => c.uidt === UITypes.Order,
       );
@@ -903,24 +1035,29 @@ export class TablesService {
         }
       }
 
+      // 获取数据库驱动
       const dbDriver = await NcConnectionMgrv2.get(source);
 
+      // 获取基础模型SQL
       const baseModel = await Model.getBaseModelSQL(context, {
         model: result,
         source,
         dbDriver,
       });
 
+      // 创建索引
       await sqlClient.raw(`CREATE INDEX ?? ON ?? (??)`, [
         `${tableCreatePayLoad.table_name}_order_idx`,
         baseModel.getTnPath(tableCreatePayLoad.table_name),
         metaOrderColumn.column_name,
       ]);
     } catch (e) {
+      // 记录创建索引错误
       this.logger.log(`Something went wrong while creating index for nc_order`);
       this.logger.error(e);
     }
 
+    // 触发表创建事件
     this.appHooksService.emit(AppEvents.TABLE_CREATE, {
       table: {
         ...param.table,

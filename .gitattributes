@@ -1,0 +1,2 @@
+# 强制所有ts文件使用LF换行
+*.ts text eol=lf

@@ -82,5 +82,11 @@ module.exports = {
     'no-empty': 'off',
     '@typescript-eslint/no-empty-function': 'off',
     '@typescript-eslint/consistent-type-imports': 'warn',
+    'prettier/prettier': [
+      'error',
+      {
+        endOfLine: 'auto', // 允许自动处理行尾符
+      },
+    ],
   },
 };

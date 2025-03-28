@@ -1,36 +1,36 @@
-import { UITypes } from 'nocodb-sdk';  // 导入UI类型
-import type { BoolType, KanbanType, MetaType } from 'nocodb-sdk';  // 导入类型定义
-import type { NcContext } from '~/interface/config';  // 导入上下文类型
-import View from '~/models/View';  // 导入View模型
-import Noco from '~/Noco';  // 导入Noco核心类
-import NocoCache from '~/cache/NocoCache';  // 导入缓存模块
-import { extractProps } from '~/helpers/extractProps';  // 导入属性提取工具
-import { CacheGetType, CacheScope, MetaTable } from '~/utils/globals';  // 导入缓存相关常量
+import { UITypes } from 'nocodb-sdk'; // 导入UI类型
+import type { BoolType, KanbanType, MetaType } from 'nocodb-sdk'; // 导入类型定义
+import type { NcContext } from '~/interface/config'; // 导入上下文类型
+import View from '~/models/View'; // 导入View模型
+import Noco from '~/Noco'; // 导入Noco核心类
+import NocoCache from '~/cache/NocoCache'; // 导入缓存模块
+import { extractProps } from '~/helpers/extractProps'; // 导入属性提取工具
+import { CacheGetType, CacheScope, MetaTable } from '~/utils/globals'; // 导入缓存相关常量
 import {
   parseMetaProp,
   prepareForDb,
   prepareForResponse,
   stringifyMetaProp,
-} from '~/utils/modelUtils';  // 导入模型工具函数
+} from '~/utils/modelUtils'; // 导入模型工具函数
 
 // 看板视图类，实现KanbanType接口
 export default class KanbanView implements KanbanType {
-  fk_view_id: string;  // 视图ID
-  title: string;  // 视图标题
-  fk_workspace_id?: string;  // 工作区ID（可选）
-  base_id?: string;  // 基础ID（可选）
-  source_id?: string;  // 数据源ID（可选）
-  fk_grp_col_id?: string;  // 分组列ID（可选）
-  fk_cover_image_col_id?: string;  // 封面图片列ID（可选）
-  meta?: MetaType;  // 元数据（可选）
+  fk_view_id: string; // 视图ID
+  title: string; // 视图标题
+  fk_workspace_id?: string; // 工作区ID（可选）
+  base_id?: string; // 基础ID（可选）
+  source_id?: string; // 数据源ID（可选）
+  fk_grp_col_id?: string; // 分组列ID（可选）
+  fk_cover_image_col_id?: string; // 封面图片列ID（可选）
+  meta?: MetaType; // 元数据（可选）
 
   // 以下字段目前未使用，暂时保留
-  show?: BoolType;  // 是否显示
-  order?: number;  // 排序
-  uuid?: string;  // 唯一标识符
-  public?: BoolType;  // 是否公开
-  password?: string;  // 密码
-  show_all_fields?: BoolType;  // 是否显示所有字段
+  show?: BoolType; // 是否显示
+  order?: number; // 排序
+  uuid?: string; // 唯一标识符
+  public?: BoolType; // 是否公开
+  password?: string; // 密码
+  show_all_fields?: BoolType; // 是否显示所有字段
 
   // 构造函数，初始化看板视图
   constructor(data: KanbanView) {

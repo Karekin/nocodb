@@ -66,7 +66,7 @@ export class HookHandlerService implements OnModuleInit, OnModuleDestroy {
             formView.fk_view_id,
           );
           const allColumns = await model.getColumns(context);
-          
+
           // 创建列ID到列信息的映射
           const fieldById = columns.reduce(
             (o: Record<string, FormColumnType>, f: FormColumnType) => {

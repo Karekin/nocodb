@@ -1,6 +1,9 @@
 <script lang="ts" setup>
+// 导入Vue运行时核心的ComponentPublicInstance类型
 import type { ComponentPublicInstance } from '@vue/runtime-core'
+// 导入Ant Design Vue的Form和SelectProps类型
 import type { Form as AntForm, SelectProps } from 'ant-design-vue'
+// 导入nocodb-sdk中的各种类型定义
 import {
   type CalendarType,
   type ColumnType,
@@ -16,9 +19,12 @@ import {
   stringToViewTypeMap,
   viewTypeToStringMap,
 } from 'nocodb-sdk'
+// 导入nocodb-sdk中的UITypes和ViewTypes枚举
 import { UITypes, ViewTypes } from 'nocodb-sdk'
+// 导入AI向导标签类型
 import { AiWizardTabsType } from '#imports'
 
+// 定义组件属性并设置默认值
 const props = withDefaults(defineProps<Props>(), {
   selectedViewId: undefined,
   groupingFieldColumnId: undefined,
@@ -27,10 +33,13 @@ const props = withDefaults(defineProps<Props>(), {
   coverImageColumnId: undefined,
 })
 
+// 定义组件事件
 const emits = defineEmits<Emits>()
 
+// 设置最大选择数量为100
 const maxSelectionCount = 100
 
+// 定义Props接口，描述组件接收的属性
 interface Props {
   modelValue: boolean
   type: ViewTypes | 'AI'
@@ -43,81 +52,105 @@ interface Props {
   description?: string
   calendarRange?: Array<{
     fk_from_column_id: string
-    fk_to_column_id: string | null // for ee only
+    fk_to_column_id: string | null // 仅用于企业版
   }>
   coverImageColumnId?: string
 }
 
+// 定义Emits接口，描述组件可以触发的事件
 interface Emits {
+  // 更新modelValue事件
   (event: 'update:modelValue', value: boolean): void
-
+  // 创建视图成功后触发的事件
   (event: 'created', value: GridType | KanbanType | GalleryType | FormType | MapType | CalendarType): void
 }
 
+// 定义表单接口，描述表单数据结构
 interface Form {
   title: string
   type: ViewTypes | 'AI'
   description?: string
   copy_from_id: string | null
-  // for kanban view only
+  // 仅用于看板视图
   fk_grp_col_id: string | null
   fk_geo_data_col_id: string | null
 
-  // for calendar view only
+  // 仅用于日历视图
   calendar_range: Array<{
     fk_from_column_id: string
-    fk_to_column_id: string | null // for ee only
+    fk_to_column_id: string | null // 仅用于企业版
   }>
   fk_cover_image_col_id: string | null | undefined
 }
 
+// 定义AI建议视图类型，扩展自SerializedAiViewType
 type AiSuggestedViewType = SerializedAiViewType & {
   selected?: boolean
   tab?: AiWizardTabsType
 }
 
+// 获取Nuxt应用实例中的$e方法（用于事件跟踪）
 const { $e } = useNuxtApp()
 
+// 使用useMetas钩子获取元数据相关功能
 const { metas, getMeta } = useMetas()
 
+// 获取工作区存储
 const workspaceStore = useWorkspace()
 
+// 从视图存储中获取按表分组的视图
 const { viewsByTable } = storeToRefs(useViewsStore())
 
+// 获取刷新命令面板的方法
 const { refreshCommandPalette } = useCommandPalette()
 
+// 获取特性开关检查方法
 const { isFeatureEnabled } = useBetaFeatureToggle()
 
+// 将props中的相关属性转换为响应式引用
 const { selectedViewId, groupingFieldColumnId, geoDataFieldColumnId, tableId, coverImageColumnId, baseId } = toRefs(props)
 
+// 创建表元数据的响应式引用
 const meta = ref<TableType | undefined>()
 
+// 创建输入元素的引用
 const inputEl = ref<ComponentPublicInstance>()
 
+// 创建AI提示输入框的引用
 const aiPromptInputRef = ref<HTMLElement>()
 
+// 创建描述输入元素的引用
 const descriptionInputEl = ref<ComponentPublicInstance>()
 
+// 创建表单验证器的引用
 const formValidator = ref<typeof AntForm>()
 
+// 创建双向绑定的modelValue
 const vModel = useVModel(props, 'modelValue', emits)
 
+// 获取国际化函数
 const { t } = useI18n()
 
+// 获取API实例
 const { api } = useApi()
 
+// 创建视图创建状态的响应式引用
 const isViewCreating = ref(false)
 
+// 计算属性：获取当前表的所有视图
 const views = computed(() => viewsByTable.value.get(tableId.value) ?? [])
 
+// 创建必要列是否存在的响应式引用
 const isNecessaryColumnsPresent = ref(true)
 
+// 定义不同视图类型的错误消息
 const errorMessages = {
   [ViewTypes.KANBAN]: t('msg.warning.kanbanNoFields'),
   [ViewTypes.MAP]: t('msg.warning.mapNoFields'),
   [ViewTypes.CALENDAR]: t('msg.warning.calendarNoFields'),
 }
 
+// 创建响应式表单对象
 const form = reactive<Form>({
   title: props.title || '',
   type: props.type,
@@ -129,12 +162,14 @@ const form = reactive<Form>({
   description: props.description || '',
 })
 
+// 创建视图选择字段选项的响应式引用
 const viewSelectFieldOptions = ref<SelectProps['options']>([])
 
+// 定义视图名称验证规则
 const viewNameRules = [
-  // name is required
+  // 名称是必填的
   { required: true, message: `${t('labels.viewName')} ${t('general.required').toLowerCase()}` },
-  // name is unique
+  // 名称必须唯一
   {
     validator: (_: unknown, v: string) =>
       new Promise((resolve, reject) => {
@@ -144,10 +179,13 @@ const viewNameRules = [
   },
 ]
 
+// 定义分组字段列验证规则
 const groupingFieldColumnRules = [{ required: true, message: `${t('general.groupingField')} ${t('general.required')}` }]
 
+// 定义地理数据字段列验证规则
 const geoDataFieldColumnRules = [{ required: true, message: `${t('general.geoDataField')} ${t('general.required')}` }]
 
+// 计算属性：获取视图类型别名
 const typeAlias = computed(
   () =>
     ({
@@ -157,36 +195,48 @@ const typeAlias = computed(
       [ViewTypes.KANBAN]: 'kanban',
       [ViewTypes.MAP]: 'map',
       [ViewTypes.CALENDAR]: 'calendar',
-      // Todo: add ai view docs route
+      // 待办：添加AI视图文档路由
       AI: '',
     }[props.type]),
 )
 
+// 使用NocoAI钩子获取AI相关功能
 const { aiIntegrationAvailable, aiLoading, aiError, predictViews: _predictViews, createViews } = useNocoAi()
 
+// 创建AI模式状态的响应式引用
 const aiMode = ref(false)
 
+// 定义AI步骤枚举
 enum AiStep {
   init = 'init',
   pick = 'pick',
 }
 
+// 创建AI模式步骤的响应式引用
 const aiModeStep = ref<AiStep | null>(null)
 
+// 计算属性：判断是否为AI视图创建模式
 const isAIViewCreateMode = computed(() => props.type === 'AI')
 
+// 创建已调用函数名称的响应式引用
 const calledFunction = ref<string>()
 
+// 创建提示文本的响应式引用
 const prompt = ref<string>('')
 
+// 创建旧提示文本的响应式引用
 const oldPrompt = ref<string>('')
 
+// 创建提示是否已生成的响应式引用
 const isPromtAlreadyGenerated = ref<boolean>(false)
 
+// 创建活动AI标签的本地响应式引用
 const activeAiTabLocal = ref<AiWizardTabsType>(AiWizardTabsType.AUTO_SUGGESTIONS)
 
+// 计算属性：判断AI是否正在保存
 const isAiSaving = computed(() => aiLoading.value && calledFunction.value === 'createViews')
 
+// 计算属性：活动AI标签
 const activeAiTab = computed({
   get: () => {
     return activeAiTabLocal.value
@@ -208,20 +258,27 @@ const activeAiTab = computed({
   },
 })
 
+// 创建预测视图的响应式引用
 const predictedViews = ref<AiSuggestedViewType[]>([])
 
+// 计算属性：获取活动标签的预测视图
 const activeTabPredictedViews = computed(() => predictedViews.value.filter((t) => t.tab === activeAiTab.value))
 
+// 创建预测历史的响应式引用
 const predictHistory = ref<AiSuggestedViewType[]>([])
 
+// 计算属性：获取活动标签的预测历史
 const activeTabPredictHistory = computed(() => predictHistory.value.filter((t) => t.tab === activeAiTab.value))
 
+// 计算属性：获取活动标签的已选视图
 const activeTabSelectedViews = computed(() => {
   return predictedViews.value.filter((v) => !!v.selected && v.tab === activeAiTab.value)
 })
 
+// 在组件挂载前初始化
 onBeforeMount(init)
 
+// 监听props.type的变化
 watch(
   () => props.type,
   (newType) => {
@@ -229,6 +286,7 @@ watch(
   },
 )
 
+// AI确认按钮点击处理函数
 const onAiEnter = async () => {
   calledFunction.value = 'createViews'
 
@@ -249,6 +307,7 @@ const onAiEnter = async () => {
   }
 }
 
+// 获取默认视图元数据
 const getDefaultViewMetas = (viewType: ViewTypes) => {
   switch (viewType) {
     case ViewTypes.FORM:
@@ -265,6 +324,7 @@ const getDefaultViewMetas = (viewType: ViewTypes) => {
   return {}
 }
 
+// 表单提交处理函数
 async function onSubmit() {
   if (aiMode.value) {
     return onAiEnter()
@@ -321,7 +381,7 @@ async function onSubmit() {
       }
 
       if (data) {
-        // View created successfully
+        // 视图创建成功
         // message.success(t('msg.toast.createView'))
 
         emits('created', data)
@@ -341,6 +401,7 @@ async function onSubmit() {
 }
 
 /*
+// 添加日历范围的函数
 const addCalendarRange = async () => {
   form.calendar_range.push({
     fk_from_column_id: viewSelectFieldOptions.value[0].value as string,
@@ -349,15 +410,19 @@ const addCalendarRange = async () => {
 }
 */
 
+// 计算属性：判断范围功能是否启用
 const isRangeEnabled = computed(() => isFeatureEnabled(FEATURE_FLAG.CALENDAR_VIEW_RANGE))
 
+// 创建启用描述的响应式引用
 const enableDescription = ref(false)
 
+// 移除描述的处理函数
 const removeDescription = () => {
   form.description = ''
   enableDescription.value = false
 }
 
+// 切换描述显示状态的处理函数
 const toggleDescription = () => {
   if (enableDescription.value) {
     enableDescription.value = false
@@ -369,8 +434,10 @@ const toggleDescription = () => {
   }
 }
 
+// 创建元数据加载状态的响应式引用
 const isMetaLoading = ref(false)
 
+// 组件挂载后执行
 onMounted(async () => {
   if (form.copy_from_id) {
     enableDescription.value = true
@@ -395,18 +462,18 @@ onMounted(async () => {
           })
 
         if (geoDataFieldColumnId.value) {
-          // take from the one from copy view
+          // 使用复制视图中的值
           form.fk_geo_data_col_id = geoDataFieldColumnId.value
         } else if (viewSelectFieldOptions.value?.length) {
-          // if there is geo data column take the first option
+          // 如果有地理数据列，选择第一个选项
           form.fk_geo_data_col_id = viewSelectFieldOptions.value?.[0]?.value as string
         } else {
-          // if there is no geo data column, disable the create button
+          // 如果没有地理数据列，禁用创建按钮
           isNecessaryColumnsPresent.value = false
         }
       }
 
-      // preset the cover image field
+      // 预设封面图片字段
       if (props.type === ViewTypes.GALLERY) {
         viewSelectFieldOptions.value = [
           { value: null, label: t('labels.noImage') },
@@ -470,7 +537,7 @@ onMounted(async () => {
         }
       }
 
-      // preset the grouping field column
+      // 预设分组字段列
       if (props.type === ViewTypes.KANBAN) {
         viewSelectFieldOptions.value = meta.value
           .columns!.filter((el) => el.uidt === UITypes.SingleSelect)
@@ -483,13 +550,13 @@ onMounted(async () => {
           })
 
         if (groupingFieldColumnId.value) {
-          // take from the one from copy view
+          // 使用复制视图中的值
           form.fk_grp_col_id = groupingFieldColumnId.value
         } else if (viewSelectFieldOptions.value?.length) {
-          // take the first option
+          // 选择第一个选项
           form.fk_grp_col_id = viewSelectFieldOptions.value[0].value as string
         } else {
-          // if there is no grouping field column, disable the create button
+          // 如果没有分组字段列，禁用创建按钮
           isNecessaryColumnsPresent.value = false
         }
 
@@ -529,17 +596,17 @@ onMounted(async () => {
           })
 
         if (viewSelectFieldOptions.value?.length) {
-          // take the first option
+          // 选择第一个选项
           if (form.calendar_range.length === 0) {
             form.calendar_range = [
               {
                 fk_from_column_id: viewSelectFieldOptions.value[0].value as string,
-                fk_to_column_id: null, // for ee only
+                fk_to_column_id: null, // 仅用于企业版
               },
             ]
           }
         } else {
-          // if there is no grouping field column, disable the create button
+          // 如果没有分组字段列，禁用创建按钮
           isNecessaryColumnsPresent.value = false
         }
       }
@@ -551,6 +618,7 @@ onMounted(async () => {
   }
 })
 
+// 判断日历是否为只读
 const isCalendarReadonly = (calendarRange?: Array<{ fk_from_column_id: string; fk_to_column_id: string | null }>) => {
   if (!calendarRange) return false
   return calendarRange.some((range) => {
@@ -559,6 +627,7 @@ const isCalendarReadonly = (calendarRange?: Array<{ fk_from_column_id: string; f
   })
 }
 
+// 计算属性：判断是否禁用
 const isDisabled = computed(() => {
   return (
     [UITypes.DateTime, UITypes.CreatedTime, UITypes.LastModifiedTime, UITypes.Formula].includes(
@@ -567,6 +636,7 @@ const isDisabled = computed(() => {
   )
 })
 
+// 值变更处理函数
 const onValueChange = async () => {
   form.calendar_range = form.calendar_range.map((range, i) => {
     if (i === 0) {
@@ -579,6 +649,7 @@ const onValueChange = async () => {
   })
 }
 
+// 预测视图函数
 const predictViews = async (): Promise<AiSuggestedViewType[]> => {
   const viewType =
     !isAIViewCreateMode.value && form.type && viewTypeToStringMap[form.type] ? viewTypeToStringMap[form.type] : undefined
@@ -602,6 +673,7 @@ const predictViews = async (): Promise<AiSuggestedViewType[]> => {
     })
 }
 
+// 预测更多视图
 const predictMore = async () => {
   calledFunction.value = 'predictMore'
 
@@ -615,6 +687,7 @@ const predictMore = async () => {
   }
 }
 
+// 刷新预测
 const predictRefresh = async () => {
   calledFunction.value = 'predictRefresh'
 
@@ -629,6 +702,7 @@ const predictRefresh = async () => {
   aiModeStep.value = AiStep.pick
 }
 
+// 根据提示预测视图
 const predictFromPrompt = async () => {
   calledFunction.value = 'predictFromPrompt'
 
@@ -646,6 +720,7 @@ const predictFromPrompt = async () => {
   isPromtAlreadyGenerated.value = true
 }
 
+// 切换标签选择状态
 const onToggleTag = (view: AiSuggestedViewType) => {
   if (
     isAiSaving.value ||
@@ -664,13 +739,14 @@ const onToggleTag = (view: AiSuggestedViewType) => {
   })
 }
 
+// 全选处理函数
 const onSelectAll = () => {
   if (activeTabSelectedViews.value.length >= maxSelectionCount) return
 
   let count = activeTabSelectedViews.value.length
 
   predictedViews.value = predictedViews.value.map((view) => {
-    // Check if the item can be selected
+    // 检查项目是否可以被选择
     if (view.tab === activeAiTab.value && !view.selected && count < maxSelectionCount) {
       view.selected = true
       count++
@@ -679,6 +755,7 @@ const onSelectAll = () => {
   })
 }
 
+// 切换到AI模式
 const toggleAiMode = async (from = false) => {
   if (aiMode.value) return
 
@@ -702,6 +779,7 @@ const toggleAiMode = async (from = false) => {
   }
 }
 
+// 禁用AI模式
 const disableAiMode = () => {
   if (isAIViewCreateMode.value) return
 
@@ -722,6 +800,7 @@ const disableAiMode = () => {
   })
 }
 
+// 全自动处理函数
 const fullAuto = async (e) => {
   const target = e.target as HTMLElement
   if (
@@ -743,10 +822,12 @@ const fullAuto = async (e) => {
   }
 }
 
+// 计算属性：判断是否正在从提示预测
 const isPredictFromPromptLoading = computed(() => {
   return aiLoading.value && calledFunction.value === 'predictFromPrompt'
 })
 
+// 处理导航到集成页面的函数
 const handleNavigateToIntegrations = () => {
   vModel.value = false
 
@@ -755,6 +836,7 @@ const handleNavigateToIntegrations = () => {
   })
 }
 
+// 处理错误时刷新的函数
 const handleRefreshOnError = () => {
   switch (calledFunction.value) {
     case 'predictMore':
@@ -768,8 +850,10 @@ const handleRefreshOnError = () => {
   }
 }
 
+// 组件挂载前初始化
 onBeforeMount(init)
 
+// 监听props.type的变化
 watch(
   () => props.type,
   (newType) => {
@@ -777,6 +861,7 @@ watch(
   },
 )
 
+// 初始化函数
 function init() {
   if (props.type === 'AI') {
     toggleAiMode()
@@ -807,6 +892,7 @@ function init() {
   }
 }
 
+// 获取复数名称的函数
 const getPluralName = (name: string) => {
   if (aiMode.value) {
     return `${name}Plural`
@@ -816,6 +902,7 @@ const getPluralName = (name: string) => {
 </script>
 
 <template>
+  <!-- 模态对话框组件 -->
   <NcModal
     v-model:visible="vModel"
     class="nc-view-create-modal !top-[25vh]"
@@ -826,11 +913,16 @@ const getPluralName = (name: string) => {
     nc-modal-class-name="!p-0"
     wrap-class-name="nc-modal-view-create-wrapper"
   >
+    <!-- 主要内容区域 -->
     <div class="py-5 flex flex-col gap-5" @dblclick.stop="fullAuto">
+      <!-- 标题区域 -->
       <div class="px-5 flex w-full flex-row justify-between items-center">
         <div class="flex font-bold text-base gap-x-3 items-center">
+          <!-- AI视图创建模式图标 -->
           <GeneralIcon v-if="isAIViewCreateMode" icon="ncAutoAwesome" class="text-nc-content-purple-dark h-6 w-6" />
+          <!-- 普通视图图标 -->
           <GeneralViewIcon v-else :meta="{ type: form.type }" class="nc-view-icon !text-[24px] !leading-6 max-h-6 max-w-6" />
+          <!-- 网格视图标题 -->
           <template v-if="form.type === ViewTypes.GRID">
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateGridView') }}
@@ -839,6 +931,7 @@ const getPluralName = (name: string) => {
               {{ $t(`labels.${getPluralName('createGridView')}`) }}
             </template>
           </template>
+          <!-- 画廊视图标题 -->
           <template v-else-if="form.type === ViewTypes.GALLERY">
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateGalleryView') }}
@@ -847,6 +940,7 @@ const getPluralName = (name: string) => {
               {{ $t(`labels.${getPluralName('createGalleryView')}`) }}
             </template>
           </template>
+          <!-- 表单视图标题 -->
           <template v-else-if="form.type === ViewTypes.FORM">
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateFormView') }}
@@ -855,6 +949,7 @@ const getPluralName = (name: string) => {
               {{ $t(`labels.${getPluralName('createFormView')}`) }}
             </template>
           </template>
+          <!-- 看板视图标题 -->
           <template v-else-if="form.type === ViewTypes.KANBAN">
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateKanbanView') }}
@@ -863,6 +958,7 @@ const getPluralName = (name: string) => {
               {{ $t(`labels.${getPluralName('createKanbanView')}`) }}
             </template>
           </template>
+          <!-- 日历视图标题 -->
           <template v-else-if="form.type === ViewTypes.CALENDAR">
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateCalendarView') }}
@@ -871,9 +967,11 @@ const getPluralName = (name: string) => {
               {{ $t(`labels.${getPluralName('createCalendarView')}`) }}
             </template>
           </template>
+          <!-- AI视图标题 -->
           <template v-else-if="form.type === 'AI'">
             {{ $t('labels.createViewUsingAi') }}
           </template>
+          <!-- 其他视图标题 -->
           <template v-else>
             <template v-if="form.copy_from_id">
               {{ $t('labels.duplicateMapView') }}
@@ -883,6 +981,7 @@ const getPluralName = (name: string) => {
             </template>
           </template>
         </div>
+        <!-- 文档链接（已注释） -->
         <!-- <a
           v-if="!form.copy_from_id"
           class="text-sm !text-gray-600 !font-default !hover:text-gray-600"
@@ -891,6 +990,7 @@ const getPluralName = (name: string) => {
         >
           Docs
         </a> -->
+        <!-- NocoAI按钮 -->
         <div
           v-if="!isAIViewCreateMode && isNecessaryColumnsPresent && isFeatureEnabled(FEATURE_FLAG.AI_FEATURES)"
           :class="{
@@ -919,6 +1019,7 @@ const getPluralName = (name: string) => {
           </NcButton>
         </div>
       </div>
+      <!-- 表单区域 -->
       <a-form
         v-if="isNecessaryColumnsPresent"
         ref="formValidator"
@@ -929,7 +1030,9 @@ const getPluralName = (name: string) => {
           '!px-5': !aiMode,
         }"
       >
+        <!-- 非AI模式表单内容 -->
         <template v-if="!aiMode">
+          <!-- 视图名称输入框 -->
           <a-form-item :rules="viewNameRules" name="title" class="relative">
             <a-input
               ref="inputEl"
@@ -941,6 +1044,7 @@ const getPluralName = (name: string) => {
             />
           </a-form-item>
 
+          <!-- 画廊视图封面图片字段选择 -->
           <a-form-item
             v-if="form.type === ViewTypes.GALLERY && !form.copy_from_id"
             :label="`${$t('labels.coverImageField')}`"
@@ -977,6 +1081,7 @@ const getPluralName = (name: string) => {
               </a-select-option>
             </NcSelect>
           </a-form-item>
+          <!-- 看板视图分组字段选择 -->
           <a-form-item
             v-if="form.type === ViewTypes.KANBAN && !form.copy_from_id"
             :label="$t('general.groupingField')"
@@ -1014,6 +1119,7 @@ const getPluralName = (name: string) => {
               </a-select-option>
             </NcSelect>
           </a-form-item>
+          <!-- 地图视图地理数据字段选择 -->
           <a-form-item
             v-if="form.type === ViewTypes.MAP"
             :label="$t('general.geoDataField')"
@@ -1030,6 +1136,7 @@ const getPluralName = (name: string) => {
               class="nc-select-shadow w-full"
             />
           </a-form-item>
+          <!-- 日历视图设置 -->
           <template v-if="form.type === ViewTypes.CALENDAR && !form.copy_from_id">
             <div
               v-for="(range, index) in form.calendar_range"
@@ -1039,6 +1146,7 @@ const getPluralName = (name: string) => {
               }"
               class="flex flex-col w-full gap-6"
             >
+              <!-- 日期字段选择 -->
               <div class="w-full space-y-2">
                 <div class="text-gray-800">
                   {{ $t('labels.organiseBy') }}
@@ -1056,8 +1164,8 @@ const getPluralName = (name: string) => {
                   <template #suffixIcon><GeneralIcon icon="arrowDown" class="text-gray-700" /></template>
                   <a-select-option
                     v-for="(option, id) in [...viewSelectFieldOptions!].filter((f) => {
-                  // If the fk_from_column_id of first range is Date, then all the other ranges should be Date
-                  // If the fk_from_column_id of first range is DateTime, then all the other ranges should be DateTime
+                  // 如果第一个范围的fk_from_column_id是Date，那么所有其他范围也应该是Date
+                  // 如果第一个范围的fk_from_column_id是DateTime，那么所有其他范围也应该是DateTime
                   if (index === 0) return true
                   const firstRange = viewSelectFieldOptions!.find((f) => f.value === form.calendar_range[0].fk_from_column_id)
                   return firstRange?.uidt === f.uidt
@@ -1086,6 +1194,7 @@ const getPluralName = (name: string) => {
                   </a-select-option>
                 </a-select>
               </div>
+              <!-- 企业版结束日期设置 -->
               <div v-if="isEeUI" class="w-full space-y-2">
                 <NcTooltip v-if="range.fk_to_column_id === null" placement="left" :disabled="!isDisabled">
                   <NcButton size="small" type="text" :disabled="isDisabled" @click="range.fk_to_column_id = undefined">
@@ -1118,8 +1227,8 @@ const getPluralName = (name: string) => {
 
                       <a-select-option
                         v-for="(option, id) in [...viewSelectFieldOptions].filter((f) => {
-                          // If the fk_from_column_id of first range is Date, then all the other ranges should be Date
-                          // If the fk_from_column_id of first range is DateTime, then all the other ranges should be DateTime
+                          // 如果第一个范围的fk_from_column_id是Date，那么所有其他范围也应该是Date
+                          // 如果第一个范围的fk_from_column_id是DateTime，那么所有其他范围也应该是DateTime
 
                           const firstRange = viewSelectFieldOptions.find(
                             (f) => f.value === form.calendar_range[0].fk_from_column_id,
@@ -1150,6 +1259,7 @@ const getPluralName = (name: string) => {
                       </a-select-option>
                     </a-select>
                   </div>
+                  <!-- 移除范围按钮 -->
                   <NcButton
                     v-if="index !== 0"
                     size="small"
@@ -1166,11 +1276,13 @@ const getPluralName = (name: string) => {
               </div>
             </div>
 
+            <!-- 添加另一个日期字段按钮（已注释） -->
             <!--          <NcButton class="mt-2" size="small" type="secondary" @click="addCalendarRange">
             <component :is="iconMap.plus" />
             Add another date field
           </NcButton> -->
 
+            <!-- 日历只读提示 -->
             <div
               v-if="isCalendarReadonly(form.calendar_range)"
               class="flex flex-row p-4 border-gray-200 border-1 gap-x-4 rounded-lg w-full"
@@ -1185,15 +1297,19 @@ const getPluralName = (name: string) => {
             </div>
           </template>
         </template>
+        <!-- AI模式表单内容 -->
         <template v-else>
-          <!-- Ai view wizard  -->
+          <!-- AI视图向导 -->
           <div v-if="!aiIntegrationAvailable" class="flex items-center gap-3 px-5 pt-2.5 pb-4.5">
             <GeneralIcon icon="alertTriangleSolid" class="!text-nc-content-orange-medium w-4 h-4" />
             <div class="text-sm text-nc-content-gray-subtle flex-1">{{ $t('title.noAiIntegrationAvailable') }}</div>
           </div>
+          <!-- AI向导标签页 -->
           <AiWizardTabs v-else v-model:active-tab="activeAiTab">
+            <!-- 自动建议内容 -->
             <template #AutoSuggestedContent>
               <div class="px-5 pt-5 pb-2">
+                <!-- 错误信息显示 -->
                 <div v-if="aiError" class="w-full flex items-center gap-3">
                   <GeneralIcon icon="ncInfoSolid" class="flex-none !text-nc-content-red-dark w-4 h-4" />
 
@@ -1209,6 +1325,7 @@ const getPluralName = (name: string) => {
                   </NcButton>
                 </div>
 
+                <!-- 初始化状态显示 -->
                 <div v-else-if="aiModeStep === 'init'">
                   <div class="text-nc-content-purple-light text-sm h-7 flex items-center gap-2">
                     <GeneralLoader size="regular" class="!text-nc-content-purple-dark" />
@@ -1216,6 +1333,7 @@ const getPluralName = (name: string) => {
                     <div class="nc-animate-dots">Auto suggesting views for {{ meta?.title }}</div>
                   </div>
                 </div>
+                <!-- 选择状态显示 -->
                 <div v-else-if="aiModeStep === 'pick'" class="flex gap-3 items-start">
                   <div class="flex-1 flex gap-2 flex-wrap">
                     <template v-if="activeTabPredictedViews.length">
@@ -1228,6 +1346,7 @@ const getPluralName = (name: string) => {
                             <div v-else>{{ v?.description }}</div>
                           </template>
 
+                          <!-- AI建议标签 -->
                           <a-tag
                             class="nc-ai-suggested-tag"
                             :class="{
@@ -1314,9 +1433,13 @@ const getPluralName = (name: string) => {
                 </div>
               </div>
             </template>
+            <!-- 提示内容模板 -->
             <template #PromptContent>
+              <!-- 主容器，设置内边距和间距 -->
               <div class="px-5 pt-5 pb-2 flex flex-col gap-5">
+                <!-- 文本输入区域容器，使用相对定位以便放置发送按钮 -->
                 <div class="relative">
+                  <!-- AI提示输入文本框 -->
                   <a-textarea
                     ref="aiPromptInputRef"
                     v-model:value="prompt"
@@ -1327,6 +1450,7 @@ const getPluralName = (name: string) => {
                   >
                   </a-textarea>
 
+                  <!-- 发送提示按钮，位于文本框右下角 -->
                   <NcButton
                     size="xs"
                     type="primary"
@@ -1347,43 +1471,61 @@ const getPluralName = (name: string) => {
                       }
                     "
                   >
+                    <!-- 加载中图标模板 -->
                     <template #loadingIcon>
                       <GeneralLoader class="!text-purple-700" size="medium" />
                     </template>
+                    <!-- 默认图标模板 -->
                     <template #icon>
                       <GeneralIcon icon="send" class="flex-none h-4 w-4" />
                     </template>
                   </NcButton>
                 </div>
 
+                <!-- 错误信息显示区域 -->
                 <div v-if="aiError" class="w-full flex items-center gap-3">
+                  <!-- 错误图标 -->
                   <GeneralIcon icon="ncInfoSolid" class="flex-none !text-nc-content-red-dark w-4 h-4" />
 
+                  <!-- 错误信息提示框，当文本过长时显示完整内容 -->
                   <NcTooltip class="truncate flex-1 text-sm text-nc-content-gray-subtle" show-on-truncate-only>
+                    <!-- 提示框标题 -->
                     <template #title>
                       {{ aiError }}
                     </template>
+                    <!-- 提示框内容 -->
                     {{ aiError }}
                   </NcTooltip>
 
+                  <!-- 刷新按钮 -->
                   <NcButton size="small" type="text" class="!text-nc-content-brand" @click.stop="handleRefreshOnError">
                     {{ $t('general.refresh') }}
                   </NcButton>
                 </div>
 
+                <!-- 已生成提示的视图显示区域 -->
                 <div v-else-if="isPromtAlreadyGenerated" class="flex flex-col gap-3">
+                  <!-- 标题 -->
                   <div class="text-nc-content-purple-dark font-semibold text-xs">Generated Views(s)</div>
+                  <!-- 视图标签容器 -->
                   <div class="flex gap-2 flex-wrap">
+                    <!-- 当有预测视图时显示 -->
                     <template v-if="activeTabPredictedViews.length">
+                      <!-- 遍历每个预测视图 -->
                       <template v-for="v of activeTabPredictedViews" :key="v.title">
+                        <!-- 视图提示框，当达到最大选择数量或有描述时显示 -->
                         <NcTooltip :disabled="!(activeTabSelectedViews.length >= maxSelectionCount || !!v?.description)">
+                          <!-- 提示框标题 -->
                           <template #title>
+                            <!-- 当达到最大选择数量时显示提示 -->
                             <div v-if="activeTabSelectedViews.length >= maxSelectionCount" class="w-[150px]">
                               You can only select {{ maxSelectionCount }} views to create at a time.
                             </div>
+                            <!-- 否则显示视图描述 -->
                             <div v-else>{{ v?.description }}</div>
                           </template>
 
+                          <!-- 视图标签 -->
                           <a-tag
                             class="nc-ai-suggested-tag"
                             :class="{
@@ -1393,7 +1535,9 @@ const getPluralName = (name: string) => {
                             :disabled="activeTabSelectedViews.length >= maxSelectionCount"
                             @click="onToggleTag(v)"
                           >
+                            <!-- 标签内容 -->
                             <div class="flex flex-row items-center gap-2 py-[3px] text-small leading-[18px]">
+                              <!-- 复选框 -->
                               <NcCheckbox
                                 :checked="v.selected"
                                 theme="ai"
@@ -1401,6 +1545,7 @@ const getPluralName = (name: string) => {
                                 :disabled="isAiSaving || (!v.selected && activeTabSelectedViews.length >= maxSelectionCount)"
                               />
 
+                              <!-- 视图类型图标 -->
                               <GeneralViewIcon
                                 :meta="{ type: stringToViewTypeMap[v.type] }"
                                 :class="{
@@ -1408,12 +1553,14 @@ const getPluralName = (name: string) => {
                                 }"
                               />
 
+                              <!-- 视图标题 -->
                               <div>{{ v.title }}</div>
                             </div>
                           </a-tag>
                         </NcTooltip>
                       </template>
                     </template>
+                    <!-- 当没有预测视图时显示无数据提示 -->
                     <div v-else class="text-nc-content-gray-subtle2">{{ $t('labels.noData') }}</div>
                   </div>
                 </div>
@@ -1422,29 +1569,42 @@ const getPluralName = (name: string) => {
           </AiWizardTabs>
         </template>
       </a-form>
-      <div v-else-if="!isNecessaryColumnsPresent" class="px-5">
+            <!-- 当必要的列不存在时显示的提示信息 -->
+            <div v-else-if="!isNecessaryColumnsPresent" class="px-5">
+        <!-- 警告框容器，使用弹性布局，添加内边距和圆角 -->
         <div class="flex flex-row p-4 border-gray-200 border-1 gap-x-4 rounded-lg w-full">
+          <!-- 警告信息内容区域 -->
           <div class="text-gray-500 flex gap-4">
+            <!-- 警告图标 -->
             <GeneralIcon class="min-w-6 h-6 text-orange-500" icon="alertTriangle" />
+            <!-- 警告文本内容区域 -->
             <div class="flex flex-col gap-1">
+              <!-- 警告标题 -->
               <h2 class="font-semibold text-sm mb-0 text-gray-800">Suitable fields not present</h2>
+              <!-- 警告详细信息，根据视图类型显示不同的错误消息 -->
               <span class="text-gray-500 font-default text-sm"> {{ errorMessages[form.type] }}</span>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- 描述输入区域，仅在启用描述且非AI模式时显示 -->
       <a-form-item v-if="enableDescription && !aiMode" class="!px-5">
+        <!-- 描述标题和删除按钮区域 -->
         <div class="flex gap-3 text-gray-800 h-7 mt-4 mb-1 items-center justify-between">
+          <!-- 描述标签文本 -->
           <span class="text-[13px]">
             {{ $t('labels.description') }}
           </span>
 
+          <!-- 删除描述按钮 -->
           <NcButton type="text" class="!h-6 !w-5" size="xsmall" @click="removeDescription">
+            <!-- 删除图标 -->
             <GeneralIcon icon="delete" class="text-gray-700 w-3.5 h-3.5" />
           </NcButton>
         </div>
 
+        <!-- 描述文本输入框 -->
         <a-textarea
           ref="descriptionInputEl"
           v-model:value="form.description"
@@ -1455,27 +1615,36 @@ const getPluralName = (name: string) => {
         />
       </a-form-item>
 
+      <!-- 底部按钮区域 -->
       <div
         class="flex flex-row w-full justify-between gap-x-2 px-5"
         :class="{
           '-mt-2': aiMode,
         }"
       >
+        <!-- 添加描述按钮，仅在未启用描述且非AI模式时显示 -->
         <NcButton v-if="!enableDescription && !aiMode" size="small" type="text" @click.stop="toggleDescription">
+          <!-- 按钮内容区域 -->
           <div class="flex !text-gray-700 items-center gap-2">
+            <!-- 添加图标 -->
             <GeneralIcon icon="plus" class="h-4 w-4" />
 
+            <!-- 按钮文本，首字母大写 -->
             <span class="first-letter:capitalize">
               {{ $t('labels.addDescription') }}
             </span>
           </div>
         </NcButton>
+        <!-- 占位元素，用于保持布局平衡 -->
         <div v-else></div>
+        <!-- 操作按钮组 -->
         <div class="flex gap-2 items-center">
+          <!-- 取消按钮 -->
           <NcButton type="secondary" size="small" :disabled="isAiSaving" @click="vModel = false">
             {{ $t('general.cancel') }}
           </NcButton>
 
+          <!-- 创建视图按钮（非AI模式） -->
           <NcButton
             v-if="!aiMode"
             v-e="[form.copy_from_id ? 'a:view:duplicate' : 'a:view:create']"
@@ -1485,9 +1654,12 @@ const getPluralName = (name: string) => {
             size="small"
             @click="onSubmit"
           >
+            <!-- 按钮默认文本 -->
             {{ $t('labels.createView') }}
+            <!-- 加载中状态的文本 -->
             <template #loading> {{ $t('labels.creatingView') }}</template>
           </NcButton>
+          <!-- AI模式下的创建按钮（当AI集成可用时） -->
           <NcButton
             v-else-if="aiIntegrationAvailable"
             type="primary"
@@ -1497,6 +1669,7 @@ const getPluralName = (name: string) => {
             :loading="isAiSaving"
             @click="onSubmit"
           >
+            <!-- 按钮内容区域 -->
             <div class="flex items-center gap-2 h-5">
               {{
                 activeTabSelectedViews.length
@@ -1510,8 +1683,10 @@ const getPluralName = (name: string) => {
                   : $t('labels.createView')
               }}
             </div>
+            <!-- 加载中状态的文本 -->
             <template #loading> {{ $t('labels.creatingView') }} </template>
           </NcButton>
+          <!-- 当AI集成不可用时显示的添加AI集成按钮 -->
           <NcButton v-else type="primary" size="small" @click="handleNavigateToIntegrations"> Add AI integration </NcButton>
         </div>
       </div>

@@ -1,4 +1,6 @@
+// 导入 NestJS 的依赖注入相关装饰器
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
+// 导入 nocodb-sdk 中的各种类型和工具函数
 import {
   AppEvents,
   ButtonActionsType,
@@ -19,26 +21,39 @@ import {
   UITypes,
   validateFormulaAndExtractTreeWithType,
 } from 'nocodb-sdk';
+// 导入 inflection 库中的复数和单数转换函数
 import { pluralize, singularize } from 'inflection';
+// 导入深度克隆库
 import rfdc from 'rfdc';
+// 导入 API 版本枚举
 import { NcApiVersion } from 'nocodb-sdk';
+// 导入类型定义
 import type {
   ColumnReqType,
   LinkToAnotherColumnReqType,
   LinkToAnotherRecordType,
   UserType,
 } from 'nocodb-sdk';
+// 导入 SQL 管理器类型
 import type SqlMgrv2 from '~/db/sql-mgr/v2/SqlMgrv2';
+// 导入基础模型和链接到另一条记录的列类型
 import type { Base, LinkToAnotherRecordColumn } from '~/models';
+// 导入自定义 Knex 类型
 import type CustomKnex from '~/db/CustomKnex';
+// 导入基础 SQL 模型类型
 import type { BaseModelSqlv2 } from '~/db/BaseModelSqlv2';
+// 导入上下文和请求类型
 import type { NcContext, NcRequest } from '~/interface/config';
+// 导入列服务接口和可重用参数类型
 import type {
   IColumnsService,
   ReusableParams,
 } from '~/services/columns.service.type';
+// 导入过滤器模型
 import { Filter } from '~/models';
+// 导入元属性解析函数
 import { parseMetaProp } from '~/utils/modelUtils';
+// 导入各种模型类
 import {
   BaseUser,
   CalendarRange,
@@ -51,9 +66,13 @@ import {
   Source,
   View,
 } from '~/models';
+// 导入应用钩子服务
 import { AppHooksService } from '~/services/app-hooks/app-hooks.service';
+// 导入公式查询构建器
 import formulaQueryBuilderv2 from '~/db/formulav2/formulaQueryBuilderv2';
+// 导入项目管理器
 import ProjectMgrv2 from '~/db/sql-mgr/v2/ProjectMgrv2';
+// 导入各种辅助函数
 import {
   createHmAndBtColumn,
   createOOColumn,
@@ -64,87 +83,114 @@ import {
   validateRequiredField,
   validateRollupPayload,
 } from '~/helpers';
+// 导入错误处理辅助函数
 import { NcError } from '~/helpers/catchError';
+// 导入从 UIDT 获取列属性的函数
 import getColumnPropsFromUIDT from '~/helpers/getColumnPropsFromUIDT';
+// 导入获取唯一列名和别名的函数
 import {
   getUniqueColumnAliasName,
   getUniqueColumnName,
 } from '~/helpers/getUniqueName';
+// 导入默认显示值映射函数
 import mapDefaultDisplayValue from '~/helpers/mapDefaultDisplayValue';
+// 导入参数验证函数
 import validateParams from '~/helpers/validateParams';
+// 导入 Noco 主类
 import Noco from '~/Noco';
+// 导入连接管理器
 import NcConnectionMgrv2 from '~/utils/common/NcConnectionMgrv2';
+// 导入元表枚举
 import { MetaTable } from '~/utils/globals';
+// 导入元服务
 import { MetaService } from '~/meta/meta.service';
+// 导入 AI 记录类型转换函数
 import {
   convertAIRecordTypeToValue,
   convertValueToAIRecordType,
 } from '~/utils/dataConversion';
+// 导入属性提取函数
 import { extractProps } from '~/helpers/extractProps';
+// 导入公式列类型更改器接口
 import { IFormulaColumnTypeChanger } from '~/services/formula-column-type-changer.types';
 
+// 导出可重用参数类型
 export type { ReusableParams } from '~/services/columns.service.type';
 
+// 创建深度克隆函数
 const deepClone = rfdc();
 
-// todo: move
+// 定义列变更类型枚举（待移动）
 export enum Altered {
   NEW_COLUMN = 1,
   DELETE_COLUMN = 4,
   UPDATE_COLUMN = 8,
 }
 
+// 重用或保存表格的函数重载
 async function reuseOrSave(
   tp: 'table',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<Model>;
+// 重用或保存数据源的函数重载
 async function reuseOrSave(
   tp: 'source',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<Source>;
+// 重用或保存基础的函数重载
 async function reuseOrSave(
   tp: 'base',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<Base>;
+// 重用或保存数据库驱动的函数重载
 async function reuseOrSave(
   tp: 'dbDriver',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<CustomKnex>;
+// 重用或保存 SQL 客户端的函数重载
 async function reuseOrSave(
   tp: 'sqlClient',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<ReturnType<typeof NcConnectionMgrv2.getSqlClient>>;
+// 重用或保存 SQL 管理器的函数重载
 async function reuseOrSave(
   tp: 'sqlMgr',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<SqlMgrv2>;
+// 重用或保存基础模型的函数重载
 async function reuseOrSave(
   tp: 'baseModel',
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<BaseModelSqlv2>;
+// 通用的重用或保存函数实现
 async function reuseOrSave(
   tp: string,
   params: ReusableParams,
   get: () => Promise<any>,
 ): Promise<any> {
+  // 如果参数中已存在该类型的对象，则直接返回
   if (params[tp]) {
     return params[tp];
   }
 
+  // 否则获取新的对象
   const res = await get();
 
+  // 将新对象保存到参数中
   params[tp] = res;
 
+  // 返回新对象
   return res;
 }
 
+// 获取连接表名称的函数
 async function getJunctionTableName(
   param: {
     base: Base;
@@ -152,19 +198,23 @@ async function getJunctionTableName(
   parent: Model,
   child: Model,
 ) {
+  // 获取父表名称，如果有前缀则去除
   const parentTable = param.base?.prefix
     ? parent.table_name.replace(`${param.base?.prefix}_`, '')
     : parent.table_name;
+  // 获取子表名称，如果有前缀则去除
   const childTable = param.base?.prefix
     ? child.table_name.replace(`${param.base?.prefix}_`, '')
     : child.table_name;
 
+  // 构建连接表名称，使用前缀和表名的前15个字符
   const tableName = `${param.base?.prefix ?? ''}_nc_m2m_${parentTable.slice(
     0,
     15,
   )}_${childTable.slice(0, 15)}`;
+  // 初始化后缀为 null
   let suffix: number = null;
-  // check table name avail or not, if not then add incremental suffix
+  // 检查表名是否可用，如果不可用则添加递增后缀
   while (
     await Noco.ncMeta.metaGet2(
       (parent as any).fk_workspace_id,
@@ -178,43 +228,54 @@ async function getJunctionTableName(
   ) {
     suffix = suffix ? suffix + 1 : 1;
   }
+  // 返回最终的表名
   return `${tableName}${suffix ?? ''}`;
 }
 
+// 使用 Injectable 装饰器标记为可注入的服务
 @Injectable()
+// 列服务类，实现 IColumnsService 接口
 export class ColumnsService implements IColumnsService {
+  // 构造函数，注入依赖服务
   constructor(
+    // 注入元服务
     protected readonly metaService: MetaService,
+    // 注入应用钩子服务
     protected readonly appHooksService: AppHooksService,
+    // 使用 forwardRef 解决循环依赖，注入公式列类型更改器
     @Inject(forwardRef(() => 'FormulaColumnTypeChanger'))
     protected readonly formulaColumnTypeChanger: IFormulaColumnTypeChanger,
   ) {}
 
+  // 更新公式的方法
   async updateFormulas(
     context: NcContext,
     args: { oldColumn: any; colBody: any },
   ) {
     const { oldColumn, colBody } = args;
 
-    // update formula if column name or title is changed
+    // 如果列名或标题发生变化，则更新公式
     if (
       oldColumn.column_name !== colBody.column_name ||
       oldColumn.title !== colBody.title
     ) {
+      // 查找包含该列 ID 的所有公式
       const formulas = await Noco.ncMeta
         .knex(MetaTable.COL_FORMULA)
         .where('formula', 'like', `%${oldColumn.id}%`);
       if (formulas) {
+        // 更新旧列的列名和标题
         oldColumn.column_name = colBody.column_name;
         oldColumn.title = colBody.title;
+        // 遍历所有公式
         for (const f of formulas) {
-          // replace column IDs with alias to get the new formula_raw
+          // 将列 ID 替换为别名以获取新的公式原始文本
           const new_formula_raw = substituteColumnIdWithAliasInFormula(
             f.formula,
             [oldColumn],
           );
 
-          // update the formula_raw and set parsed_tree to null to reparse the formula
+          // 更新公式原始文本并将解析树设为 null 以重新解析公式
           await FormulaColumn.update(context, oldColumn.id, {
             formula_raw: new_formula_raw,
             parsed_tree: null,
@@ -224,6 +285,7 @@ export class ColumnsService implements IColumnsService {
     }
   }
 
+  // 更新元数据和数据库的私有方法
   private async updateMetaAndDatabase(
     context: NcContext,
     args: {
@@ -236,17 +298,21 @@ export class ColumnsService implements IColumnsService {
   ) {
     const { table, column, source, reuse } = args;
 
+    // 构建表更新主体
     const tableUpdateBody = {
       ...table,
       tn: table.table_name,
+      // 映射原始列，添加列名和原始列名属性
       originalColumns: table.columns.map((c) => ({
         ...c,
         cn: c.column_name,
         cno: c.column_name,
       })),
+      // 映射列，处理要更新的列
       columns: await Promise.all(
         table.columns.map(async (c) => {
           if (c.id === column.id) {
+            // 如果是要更新的列，合并列属性并标记为已更改
             const res = {
               ...c,
               ...column,
@@ -255,12 +321,14 @@ export class ColumnsService implements IColumnsService {
               altered: Altered.UPDATE_COLUMN,
             };
 
+            // 如果有处理列的回调函数，则执行
             if (args.processColumn) {
               await args.processColumn();
             }
 
             return Promise.resolve(res);
           } else {
+            // 否则只添加列名属性
             (c as any).cn = c.column_name;
           }
           return Promise.resolve(c);
@@ -268,13 +336,16 @@ export class ColumnsService implements IColumnsService {
       ),
     };
 
+    // 获取 SQL 管理器
     const sqlMgr = await reuseOrSave('sqlMgr', reuse, async () =>
       ProjectMgrv2.getSqlMgr(context, {
         id: source.base_id,
       }),
     );
+    // 执行表更新操作
     await sqlMgr.sqlOpPlus(source, 'tableUpdate', tableUpdateBody);
 
+    // 更新列元数据
     await Column.update(context, column.id, {
       ...column,
     });

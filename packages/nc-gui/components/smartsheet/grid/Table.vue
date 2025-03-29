@@ -1802,8 +1802,15 @@ onKeyStroke('ArrowDown', onDown)
 </script>
 
 <template>
+  <!-- 最外层容器，使用 flex 布局 -->
+  <!-- 动态调整高度和宽度，当 headerOnly 为 false 时占据整个视口 -->
   <div class="flex flex-col" :class="`${headerOnly !== true ? 'h-full w-full' : ''}`">
+    <!-- 拖拽图标占位符，绝对定位，透明且不可交互 -->
+    <!-- 用于在拖拽时保持布局的稳定性 -->
     <div data-testid="drag-icon-placeholder" class="absolute w-1 h-1 pointer-events-none opacity-0"></div>
+
+    <!-- 拖拽列宽占位符，绝对定位 -->
+    <!-- 动态显示或隐藏，根据 draggedCol 的值调整样式 -->
     <div
       ref="dragColPlaceholderDomRef"
       :class="{
@@ -1811,32 +1818,47 @@ onKeyStroke('ArrowDown', onDown)
       }"
       class="absolute flex items-center z-40 top-0 h-full bg-gray-50 pointer-events-none opacity-60"
     >
+      <!-- 拖拽列宽占位符的内部内容 -->
+      <!-- 动态设置宽度，根据 gridViewCols 中的值 -->
       <div
         v-if="draggedCol"
         :style="{
-        'min-width': gridViewCols[draggedCol.id!]?.width || '180px',
-        'max-width': gridViewCols[draggedCol.id!]?.width || '180px',
-        'width': gridViewCols[draggedCol.id!]?.width || '180px',
-      }"
+          'min-width': gridViewCols[draggedCol.id!]?.width || '180px',
+          'max-width': gridViewCols[draggedCol.id!]?.width || '180px',
+          'width': gridViewCols[draggedCol.id!]?.width || '180px',
+        }"
         class="border-r-1 border-l-1 border-gray-200 h-full"
       ></div>
     </div>
+
+    <!-- 表格容器，使用相对定位 -->
+    <!-- 动态添加类名，根据 gridWrapperClass 的值调整样式 -->
     <div ref="gridWrapper" class="nc-grid-wrapper min-h-0 flex-1 relative" :class="gridWrapperClass">
+      <!-- 加载状态提示，绝对定位，覆盖整个表格 -->
+      <!-- 仅在分页加载中且 headerOnly 为 false 时显示 -->
       <div
         v-show="isPaginationLoading && !headerOnly"
         class="flex items-center justify-center bg-white/80 absolute l-0 t-0 w-full h-full z-10 pb-10 pointer-events-none"
       >
+        <!-- 加载提示内容 -->
         <div class="flex flex-col items-center justify-center gap-2">
+          <!-- 加载动画 -->
           <GeneralLoader size="xlarge" />
+          <!-- 加载文本 -->
           <span class="text-center" v-html="loaderText"></span>
         </div>
       </div>
+
+      <!-- 上下文菜单组件 -->
+      <!-- 动态绑定可见性，根据 isSqlView 调整触发方式 -->
       <NcDropdown
         v-model:visible="contextMenu"
         :trigger="isSqlView ? [] : ['contextmenu']"
         overlay-class-name="nc-dropdown-grid-context-menu"
       >
         <div>
+          <!-- 表格元素，使用固定表头 -->
+          <!-- 动态调整样式，根据 isMobileMode 切换移动端和桌面端样式 -->
           <table
             class="xc-row-table nc-grid backgroundColorDefault !h-auto bg-white sticky top-0 z-5 bg-white"
             :class="{
@@ -1844,14 +1866,18 @@ onKeyStroke('ArrowDown', onDown)
               desktop: !isMobileMode,
             }"
           >
+            <!-- 表头部分 -->
             <thead v-show="hideHeader !== true" ref="tableHeadEl">
+              <!-- 加载状态下的表头 -->
               <tr v-if="isViewColumnsLoading">
+                <!-- 动态生成加载状态的单元格 -->
                 <td
                   v-for="(col, colIndex) of dummyColumnDataForLoading"
                   :key="colIndex"
                   class="!bg-gray-50 h-full border-b-1 border-r-1"
                   :class="{ 'min-w-45': colIndex !== 0, 'min-w-16': colIndex === 0 }"
                 >
+                  <!-- 骨架屏加载动画 -->
                   <a-skeleton
                     :active="true"
                     :title="true"
@@ -1864,11 +1890,17 @@ onKeyStroke('ArrowDown', onDown)
                   />
                 </td>
               </tr>
+
+              <!-- 实际表头内容 -->
               <tr v-show="!isViewColumnsLoading" class="nc-grid-header">
+                <!-- 行号列 -->
                 <th class="w-[64px] min-w-[64px]" data-testid="grid-id-column">
                   <div class="w-full h-full flex pl-2 pr-1 items-center" data-testid="nc-check-all">
+                    <!-- 行号内容 -->
                     <template v-if="!readOnly && !hideCheckbox">
+                      <!-- 未全选时显示行号 -->
                       <div class="nc-no-label text-gray-500" :class="{ hidden: vSelectedAllRecords }">#</div>
+                      <!-- 全选时显示复选框 -->
                       <div
                         :class="{
                           hidden: !vSelectedAllRecords,
@@ -1877,15 +1909,17 @@ onKeyStroke('ArrowDown', onDown)
                         class="nc-check-all w-full items-center"
                       >
                         <a-checkbox v-model:checked="vSelectedAllRecords" />
-
                         <span class="flex-1" />
                       </div>
                     </template>
+                    <!-- 只读模式或隐藏复选框时显示行号 -->
                     <template v-else>
                       <div class="text-gray-500">#</div>
                     </template>
                   </div>
                 </th>
+
+                <!-- 第一列（可拖拽调整宽度） -->
                 <th
                   v-if="fields?.[0]?.id"
                   v-xc-ver-resize
@@ -1913,14 +1947,18 @@ onKeyStroke('ArrowDown', onDown)
                     @drag.stop="onDrag($event)"
                     @dragend.stop="onDragEnd($event)"
                   >
+                    <!-- 虚拟列头单元格 -->
                     <LazySmartsheetHeaderVirtualCell
                       v-if="fields[0] && colMeta[0].isVirtualCol"
                       :column="fields[0]"
                       :hide-menu="readOnly || !!isMobileMode"
                     />
+                    <!-- 普通列头单元格 -->
                     <LazySmartsheetHeaderCell v-else :column="fields[0]" :hide-menu="readOnly || !!isMobileMode" />
                   </div>
                 </th>
+
+                <!-- 占位符列（开始部分） -->
                 <th
                   v-if="placeholderStartFields.length"
                   :colspan="placeholderStartFields.length"
@@ -1931,6 +1969,8 @@ onKeyStroke('ArrowDown', onDown)
                   }"
                   class="nc-grid-column-header"
                 ></th>
+
+                <!-- 动态生成的可见列 -->
                 <th
                   v-for="{ field: col, index } in visibleFields"
                   :key="col.id"
@@ -1959,14 +1999,18 @@ onKeyStroke('ArrowDown', onDown)
                     @drag.stop="onDrag($event)"
                     @dragend.stop="onDragEnd($event)"
                   >
+                    <!-- 虚拟列头单元格 -->
                     <LazySmartsheetHeaderVirtualCell
                       v-if="colMeta[index].isVirtualCol"
                       :column="col"
                       :hide-menu="readOnly || !!isMobileMode"
                     />
+                    <!-- 普通列头单元格 -->
                     <LazySmartsheetHeaderCell v-else :column="col" :hide-menu="readOnly || !!isMobileMode" />
                   </div>
                 </th>
+
+                <!-- 占位符列（结束部分） -->
                 <th
                   v-if="placeholderEndFields.length"
                   :colspan="placeholderEndFields.length"
@@ -1977,6 +2021,8 @@ onKeyStroke('ArrowDown', onDown)
                   }"
                   class="nc-grid-column-header"
                 ></th>
+
+                <!-- 添加列按钮 -->
                 <th
                   v-if="isAddingColumnAllowed"
                   v-e="['c:column:add']"
@@ -1994,12 +2040,15 @@ onKeyStroke('ArrowDown', onDown)
                       @visible-change="onVisibilityChange"
                     >
                       <div class="h-full w-[60px] flex items-center justify-center">
+                        <!-- 添加列图标 -->
                         <GeneralIcon v-if="isEeUI && (altModifier || persistMenu)" icon="magic" class="text-sm text-orange-400" />
                         <component :is="iconMap.plus" class="text-base nc-column-add text-gray-500 !group-hover:text-black" />
                       </div>
 
+                      <!-- 预测列菜单 -->
                       <template v-if="isEeUI && persistMenu && meta?.id" #overlay>
                         <NcMenu class="predict-menu" variant="small">
+                          <!-- 预测列子菜单 -->
                           <NcSubMenu v-if="predictedNextColumn?.length" key="predict-column" class="py-0 px-0 w-full">
                             <template #title>
                               <div class="flex flex-row items-center px-1 py-0.5 gap-1 w-full">
@@ -2063,6 +2112,7 @@ onKeyStroke('ArrowDown', onDown)
                               </div>
                             </NcMenuItem>
                           </NcSubMenu>
+                          <!-- 预测列和公式入口 -->
                           <NcMenuItem v-else class="flex flex-row items-center py-3" @click="predictNextFormulas(meta.id)">
                             <!-- Predict Formulas -->
                             <MdiReload v-if="predictingNextFormulas" class="animate-infinite animate-spin" />
@@ -2073,6 +2123,7 @@ onKeyStroke('ArrowDown', onDown)
                           </NcMenuItem>
                         </NcMenu>
                       </template>
+                      <!-- 添加列菜单 -->
                       <template v-else #overlay>
                         <div class="nc-edit-or-add-provider-wrapper">
                           <LazySmartsheetColumnEditOrAddProvider
@@ -2092,6 +2143,8 @@ onKeyStroke('ArrowDown', onDown)
                     </a-dropdown>
                   </div>
                 </th>
+
+                <!-- 表头右侧占位符 -->
                 <th
                   class="!border-0 relative !xs:hidden"
                   :style="{
@@ -2111,6 +2164,8 @@ onKeyStroke('ArrowDown', onDown)
               </tr>
             </thead>
           </table>
+
+          <!-- 表格内容区域 -->
           <div
             v-if="!showSkeleton"
             class="table-overlay"
@@ -2120,6 +2175,7 @@ onKeyStroke('ArrowDown', onDown)
               width: `${maxGridWidth}px`,
             }"
           >
+            <!-- 表格主体 -->
             <table
               ref="smartTable"
               class="xc-row-table nc-grid backgroundColorDefault !h-auto bg-white relative"
@@ -2135,6 +2191,7 @@ onKeyStroke('ArrowDown', onDown)
               @contextmenu="showContextMenu"
             >
               <tbody v-if="headerOnly !== true" ref="tableBodyEl">
+                <!-- 加载状态下的行 -->
                 <template v-if="showSkeleton">
                   <tr v-for="(row, rowIndex) of dummyRowDataForLoading" :key="rowIndex">
                     <td
@@ -2145,6 +2202,8 @@ onKeyStroke('ArrowDown', onDown)
                     ></td>
                   </tr>
                 </template>
+
+                <!-- 占位符行（开始部分） -->
                 <template v-if="!showSkeleton && placeholderStartRows.length">
                   <LazySmartsheetGridPlaceholderRow
                     :row-count="placeholderStartRows.length"
@@ -2153,6 +2212,8 @@ onKeyStroke('ArrowDown', onDown)
                     :col-count="totalRenderedColLength"
                   />
                 </template>
+
+                <!-- 动态生成的行 -->
                 <LazySmartsheetRow v-for="{ row, index: rowIndex } in visibleData" :key="rowIndex" :row="row">
                   <template #default="{ state }">
                     <tr
@@ -2166,6 +2227,7 @@ onKeyStroke('ArrowDown', onDown)
                       :style="{ height: rowHeight ? `${rowHeight}px` : `${rowHeightInPx['1']}px` }"
                       :data-testid="`grid-row-${rowIndex}`"
                     >
+                      <!-- 行号单元格 -->
                       <td
                         key="row-index"
                         class="caption nc-grid-cell w-[64px] min-w-[64px]"
@@ -2173,12 +2235,14 @@ onKeyStroke('ArrowDown', onDown)
                         @contextmenu="contextMenuTarget = null"
                       >
                         <div class="w-[60px] pl-2 pr-1 items-center flex gap-1">
+                          <!-- 行号 -->
                           <div
                             class="nc-row-no sm:min-w-4 text-xs text-gray-500"
                             :class="{ toggle: !readOnly, hidden: row.rowMeta.selected }"
                           >
                             {{ ((paginationDataRef?.page ?? 1) - 1) * (paginationDataRef?.pageSize ?? 25) + rowIndex + 1 }}
                           </div>
+                          <!-- 复选框 -->
                           <div
                             v-if="!readOnly"
                             :class="{
@@ -2191,18 +2255,22 @@ onKeyStroke('ArrowDown', onDown)
                           </div>
                           <span class="flex-1" />
 
+                          <!-- 行操作按钮 -->
                           <div
                             class="nc-expand"
                             :data-testid="`nc-expand-${rowIndex}`"
                             :class="{ 'nc-comment': row.rowMeta?.commentCount }"
                           >
+                            <!-- 保存状态 -->
                             <a-spin
                               v-if="row.rowMeta.saving"
                               class="!flex items-center"
                               :data-testid="`row-save-spinner-${rowIndex}`"
                             />
 
+                            <!-- 行操作内容 -->
                             <template v-else>
+                              <!-- 评论计数 -->
                               <span
                                 v-if="row.rowMeta?.commentCount && expandForm"
                                 v-e="['c:expanded-form:open']"
@@ -2211,6 +2279,7 @@ onKeyStroke('ArrowDown', onDown)
                               >
                                 {{ row.rowMeta.commentCount }}
                               </span>
+                              <!-- 展开按钮 -->
                               <div
                                 v-else
                                 class="cursor-pointer flex items-center border-1 border-gray-100 active:ring rounded-md p-1 hover:(bg-white border-nc-border-gray-medium)"
@@ -2227,6 +2296,8 @@ onKeyStroke('ArrowDown', onDown)
                           </div>
                         </div>
                       </td>
+
+                      <!-- 第一列单元格 -->
                       <SmartsheetTableDataCell
                         v-if="fields[0]"
                         :key="fields[0].id"
@@ -2265,6 +2336,7 @@ onKeyStroke('ArrowDown', onDown)
                         @contextmenu="showContextMenu($event, { row: rowIndex, col: 0 })"
                       >
                         <div v-if="!switchingTab" class="w-full">
+                          <!-- 虚拟单元格 -->
                           <LazySmartsheetVirtualCell
                             v-if="fields[0] && colMeta[0].isVirtualCol && fields[0].title"
                             v-model="row.row[fields[0].title]"
@@ -2276,6 +2348,7 @@ onKeyStroke('ArrowDown', onDown)
                             @save="updateOrSaveRow?.(row, '', state)"
                           />
 
+                          <!-- 普通单元格 -->
                           <LazySmartsheetCell
                             v-else-if="fields[0] && fields[0].title"
                             v-model="row.row[fields[0].title]"
@@ -2293,6 +2366,8 @@ onKeyStroke('ArrowDown', onDown)
                           />
                         </div>
                       </SmartsheetTableDataCell>
+
+                      <!-- 占位符单元格（开始部分） -->
                       <td
                         v-if="placeholderStartFields.length"
                         :colspan="placeholderStartFields.length"
@@ -2303,6 +2378,8 @@ onKeyStroke('ArrowDown', onDown)
                         }"
                         class="nc-grid-cell"
                       ></td>
+
+                      <!-- 动态生成的单元格 -->
                       <SmartsheetTableDataCell
                         v-for="{ field: columnObj, index: colIndex } of visibleFields"
                         :key="`cell-${colIndex}-${rowIndex}`"
@@ -2342,6 +2419,7 @@ onKeyStroke('ArrowDown', onDown)
                         @contextmenu="showContextMenu($event, { row: rowIndex, col: colIndex })"
                       >
                         <div v-if="!switchingTab" class="w-full">
+                          <!-- 虚拟单元格 -->
                           <LazySmartsheetVirtualCell
                             v-if="colMeta[colIndex].isVirtualCol && columnObj.title"
                             v-model="row.row[columnObj.title]"
@@ -2353,6 +2431,7 @@ onKeyStroke('ArrowDown', onDown)
                             @save="updateOrSaveRow?.(row, '', state)"
                           />
 
+                          <!-- 普通单元格 -->
                           <LazySmartsheetCell
                             v-else-if="columnObj.title"
                             v-model="row.row[columnObj.title]"
@@ -2370,6 +2449,8 @@ onKeyStroke('ArrowDown', onDown)
                           />
                         </div>
                       </SmartsheetTableDataCell>
+
+                      <!-- 占位符单元格（结束部分） -->
                       <td
                         v-if="placeholderEndFields.length"
                         :colspan="placeholderEndFields.length"
@@ -2384,6 +2465,7 @@ onKeyStroke('ArrowDown', onDown)
                   </template>
                 </LazySmartsheetRow>
 
+                <!-- 占位符行（结束部分） -->
                 <template v-if="!showSkeleton && placeholderEndRows.length">
                   <LazySmartsheetGridPlaceholderRow
                     :row-count="placeholderEndRows.length"
@@ -2393,6 +2475,7 @@ onKeyStroke('ArrowDown', onDown)
                   />
                 </template>
 
+                <!-- 添加新行按钮 -->
                 <tr
                   v-if="isAddingEmptyRowAllowed && !isGroupBy"
                   v-e="['c:row:add:grid-bottom']"
@@ -2417,7 +2500,7 @@ onKeyStroke('ArrowDown', onDown)
               </tbody>
             </table>
 
-            <!-- Fill Handle -->
+            <!-- 填充柄 -->
             <div
               v-show="showFillHandle"
               ref="fillHandle"
@@ -2436,8 +2519,10 @@ onKeyStroke('ArrowDown', onDown)
           </div>
         </div>
 
+        <!-- 上下文菜单内容 -->
         <template #overlay>
           <NcMenu class="!rounded !py-0" variant="small" @click="contextMenu = false">
+            <!-- 批量更新选项 -->
             <NcMenuItem
               v-if="
                 isEeUI && !contextMenuClosing && !contextMenuTarget && data.some((r) => r.rowMeta.selected) && !isDataReadOnly
@@ -2450,6 +2535,7 @@ onKeyStroke('ArrowDown', onDown)
               </div>
             </NcMenuItem>
 
+            <!-- 删除选中行选项 -->
             <NcMenuItem
               v-if="!contextMenuClosing && !contextMenuTarget && data.some((r) => r.rowMeta.selected) && !isDataReadOnly"
               class="nc-base-menu-item !text-red-600 !hover:bg-red-50"
@@ -2507,6 +2593,7 @@ onKeyStroke('ArrowDown', onDown)
               </NcMenuItem>
             </NcTooltip>
 
+            <!-- 复制单元格选项 -->
             <NcMenuItem
               v-if="contextMenuTarget"
               class="nc-base-menu-item"
@@ -2520,6 +2607,7 @@ onKeyStroke('ArrowDown', onDown)
               </div>
             </NcMenuItem>
 
+            <!-- 粘贴单元格选项 -->
             <NcMenuItem
               v-if="contextMenuTarget && hasEditPermission && !isDataReadOnly"
               class="nc-base-menu-item"
@@ -2534,7 +2622,7 @@ onKeyStroke('ArrowDown', onDown)
               </div>
             </NcMenuItem>
 
-            <!-- Clear cell -->
+            <!-- 清除单元格选项（单个单元格） -->
             <NcMenuItem
               v-if="
                 contextMenuTarget &&
@@ -2554,7 +2642,7 @@ onKeyStroke('ArrowDown', onDown)
               </div>
             </NcMenuItem>
 
-            <!-- Clear cell -->
+            <!-- 清除单元格选项（多个单元格） -->
             <NcMenuItem
               v-else-if="contextMenuTarget && hasEditPermission && !isDataReadOnly"
               class="nc-base-menu-item"
@@ -2568,6 +2656,7 @@ onKeyStroke('ArrowDown', onDown)
               </div>
             </NcMenuItem>
 
+            <!-- 添加评论选项 -->
             <template v-if="contextMenuTarget && selectedRange.isSingleCell() && isUIAllowed('commentEdit') && !isMobileMode">
               <NcDivider />
               <NcMenuItem class="nc-base-menu-item" @click="commentRow(contextMenuTarget.row)">
@@ -2578,6 +2667,7 @@ onKeyStroke('ArrowDown', onDown)
               </NcMenuItem>
             </template>
 
+            <!-- 删除行选项 -->
             <template v-if="hasEditPermission && !isDataReadOnly">
               <NcDivider v-if="!(!contextMenuClosing && !contextMenuTarget && data.some((r) => r.rowMeta.selected))" />
               <NcMenuItem
@@ -2608,7 +2698,9 @@ onKeyStroke('ArrowDown', onDown)
       </NcDropdown>
     </div>
 
+    <!-- 分页组件 -->
     <div class="relative">
+      <!-- 分组视图分页 -->
       <LazySmartsheetPagination
         v-if="headerOnly !== true && paginationDataRef && isGroupBy"
         :key="`nc-pagination-${isMobileMode}`"
@@ -2624,6 +2716,7 @@ onKeyStroke('ArrowDown', onDown)
       >
         <template v-if="isAddingEmptyRowAllowed && !showSkeleton" #add-record>
           <div class="flex ml-1">
+            <!-- 添加新记录按钮 -->
             <NcButton
               v-if="isMobileMode"
               v-e="[isAddNewRecordGridMode ? 'c:row:add:grid' : 'c:row:add:form']"
@@ -2634,6 +2727,7 @@ onKeyStroke('ArrowDown', onDown)
             >
               {{ $t('activity.newRecord') }}
             </NcButton>
+            <!-- 添加新记录下拉按钮 -->
             <a-dropdown-button
               v-else
               v-e="[isAddNewRecordGridMode ? 'c:row:add:grid:toggle' : 'c:row:add:form:toggle']"
@@ -2661,6 +2755,7 @@ onKeyStroke('ArrowDown', onDown)
                       '-left-21.5': isAddNewRecordGridMode,
                     }"
                   >
+                    <!-- 添加新记录（表格模式） -->
                     <div
                       v-e="['c:row:add:grid']"
                       class="px-4 py-3 flex flex-col select-none gap-y-2 cursor-pointer rounded-md hover:bg-gray-100 text-gray-600 nc-new-record-with-grid group"
@@ -2678,6 +2773,7 @@ onKeyStroke('ArrowDown', onDown)
                         {{ $t('labels.addRowGrid') }}
                       </div>
                     </div>
+                    <!-- 添加新记录（表单模式） -->
                     <div
                       v-e="['c:row:add:form']"
                       class="px-4 py-3 flex flex-col select-none gap-y-2 cursor-pointer rounded-md hover:bg-gray-100 text-gray-600 nc-new-record-with-form group"
@@ -2705,6 +2801,8 @@ onKeyStroke('ArrowDown', onDown)
           </div>
         </template>
       </LazySmartsheetPagination>
+
+      <!-- 普通分页 -->
       <LazySmartsheetGridPaginationV2
         v-else-if="paginationDataRef"
         v-model:pagination-data="paginationDataRef"
@@ -2713,9 +2811,12 @@ onKeyStroke('ArrowDown', onDown)
         :scroll-left="scrollLeft"
       />
     </div>
+
+    <!-- 添加新记录按钮（非分组视图） -->
     <div v-if="headerOnly !== true && paginationDataRef && !isGroupBy" class="absolute bottom-12 left-2" @click.stop>
       <NcDropdown v-if="isAddingEmptyRowAllowed && !showSkeleton">
         <div class="flex shadow-nc-sm rounded-lg">
+          <!-- 添加新记录按钮（移动端） -->
           <NcButton
             v-if="isMobileMode"
             v-e="[isAddNewRecordGridMode ? 'c:row:add:grid' : 'c:row:add:form']"
@@ -2731,6 +2832,8 @@ onKeyStroke('ArrowDown', onDown)
               New Record
             </div>
           </NcButton>
+
+          <!-- 添加新记录按钮（桌面端） -->
           <NcButton
             v-else
             v-e="[isAddNewRecordGridMode ? 'c:row:add:grid' : 'c:row:add:form']"
@@ -2749,6 +2852,8 @@ onKeyStroke('ArrowDown', onDown)
               <template v-else> {{ $t('activity.newRecord') }} - {{ $t('objects.viewType.form') }} </template>
             </div>
           </NcButton>
+
+          <!-- 更多信息按钮 -->
           <NcButton
             v-if="!isMobileMode"
             size="small"
@@ -2760,8 +2865,10 @@ onKeyStroke('ArrowDown', onDown)
           </NcButton>
         </div>
 
+        <!-- 下拉菜单 -->
         <template #overlay>
           <NcMenu variant="small">
+            <!-- 添加新记录（表格模式） -->
             <NcMenuItem v-e="['c:row:add:grid']" class="nc-new-record-with-grid group" @click="onNewRecordToGridClick">
               <div class="flex flex-row items-center justify-start gap-x-3">
                 <component :is="viewIcons[ViewTypes.GRID]?.icon" class="nc-view-icon text-inherit" />
@@ -2770,6 +2877,7 @@ onKeyStroke('ArrowDown', onDown)
 
               <GeneralIcon v-if="isAddNewRecordGridMode" icon="check" class="w-4 h-4 text-primary" />
             </NcMenuItem>
+            <!-- 添加新记录（表单模式） -->
             <NcMenuItem v-e="['c:row:add:form']" class="nc-new-record-with-form group" @click="onNewRecordToFormClick">
               <div class="flex flex-row items-center justify-start gap-x-3">
                 <component :is="viewIcons[ViewTypes.FORM]?.icon" class="nc-view-icon text-inherit" />
@@ -2786,97 +2894,136 @@ onKeyStroke('ArrowDown', onDown)
   </div>
 </template>
 
+/* 全局样式定义，不受scoped限制 */
 <style lang="scss">
+/* 分页包装器中的下拉按钮样式 */
 .nc-grid-pagination-wrapper .ant-dropdown-button {
+  /* 主按钮样式 */
   > .ant-btn {
+    /* 移除内边距，设置左侧圆角，悬停时改变边框颜色 */
     @apply !p-0 !rounded-l-lg hover:border-gray-400;
   }
 
+  /* 下拉触发器按钮样式 */
   > .ant-dropdown-trigger {
+    /* 设置右侧圆角 */
     @apply !rounded-r-lg;
+    /* 移除左侧圆角 */
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
   }
 
+  /* 整个按钮组的样式 */
   @apply !rounded-lg;
 }
 
+/* 预测菜单样式 */
 .predict-menu {
+  /* 确保下拉菜单标题内容的div元素占满宽度 */
   .ant-dropdown-menu-title-content > div > div {
     @apply !w-full;
   }
 }
 </style>
 
+/* 局部样式定义，仅应用于当前组件 */
 <style scoped lang="scss">
+/* 网格包装器的基本样式 */
 .nc-grid-wrapper {
+  /* 设置高度和宽度为100% */
   @apply h-full w-full;
 
+  /* 添加/编辑列按钮的背景色 */
   .nc-grid-add-edit-column {
     @apply bg-gray-50;
   }
 
+  /* 新增单元格行悬停效果 */
   .nc-grid-add-new-cell:hover td {
     @apply text-black !bg-gray-50;
   }
 
+  /* 所有非新增单元格项的td和th元素的基本样式 */
   td:not(.nc-grid-add-new-cell-item),
   th {
+    /* 设置边框、背景色和内边距 */
     @apply border-gray-100 border-solid border-r bg-gray-100 p-0;
+    /* 设置最小高度和固定高度 */
     min-height: 32px !important;
     height: 32px !important;
+    /* 设置相对定位，便于绝对定位子元素 */
     position: relative;
   }
 
+  /* 表头th元素的特定样式 */
   th {
+    /* 设置底部边框 */
     @apply border-b-1 border-gray-200;
 
+    /* 深度选择器修改name类的文本大小 */
     :deep(.name) {
       @apply text-small;
     }
 
+    /* 深度选择器修改单元格图标的大小 */
     :deep(.nc-cell-icon),
     :deep(.nc-virtual-cell-icon) {
       @apply !w-3.5 !h-3.5 !text-small;
     }
   }
 
+  /* 确保网格头部最后一个th元素有底部边框 */
   .nc-grid-header th:last-child {
     @apply !border-b-1;
   }
 
+  /* 所有非新增单元格项的td元素样式 */
   td:not(.nc-grid-add-new-cell-item) {
     @apply bg-white border-b;
   }
 
+  /* 除第一个单元格和新增单元格项外的所有td元素样式 */
   td:not(:first-child):not(.nc-grid-add-new-cell-item) {
+    /* 设置水平内边距 */
     @apply px-3;
 
+    /* 顶部对齐的单元格样式 */
     &.align-top {
       @apply py-2;
 
+      /* 当单元格包含长文本区域时的特殊处理 */
       &:has(.nc-cell.nc-cell-longtext textarea) {
         @apply py-0 pr-0;
       }
     }
 
+    /* 垂直居中对齐的单元格样式 */
     &.align-middle {
       @apply py-0;
 
+      /* 当单元格包含长文本区域时的特殊处理 */
       &:has(.nc-cell.nc-cell-longtext textarea) {
         @apply pr-0;
       }
     }
 
+    /* 单元格内div容器的样式 */
     & > div {
+      /* 隐藏溢出内容 */
       overflow: hidden;
+      /* 使用flex布局并设置自动高度 */
       @apply flex h-auto;
     }
+
+    /* 活动单元格的样式 */
     &.active-cell {
+      /* 深度选择器修改单元格内链接的颜色 */
       :deep(.nc-cell) {
         a.nc-cell-field-link {
+          /* 设置品牌主色 */
           @apply !text-brand-500;
 
+          /* 悬停时的颜色和字段颜色 */
           &:hover,
           .nc-cell-field {
             @apply !text-brand-500;
@@ -2884,20 +3031,27 @@ onKeyStroke('ArrowDown', onDown)
         }
       }
     }
+
+    /* 深度选择器修改普通单元格和虚拟单元格的样式 */
     :deep(.nc-cell),
     :deep(.nc-virtual-cell) {
+      /* 设置小号文本 */
       @apply !text-small;
 
+      /* 字段、输入框和文本区域的样式 */
       .nc-cell-field,
       input,
       textarea {
         @apply !text-small !pl-0 !py-0 m-0;
       }
 
+      /* 非显示值单元格的样式 */
       &:not(.nc-display-value-cell) {
+        /* 设置文本颜色和字重 */
         @apply text-gray-600;
         font-weight: 500;
 
+        /* 字段、输入框和文本区域的样式 */
         .nc-cell-field,
         input,
         textarea {
@@ -2906,6 +3060,7 @@ onKeyStroke('ArrowDown', onDown)
         }
       }
 
+      /* 字段、链接、输入框和文本区域的通用样式 */
       .nc-cell-field,
       a.nc-cell-field-link,
       input,
@@ -2913,36 +3068,48 @@ onKeyStroke('ArrowDown', onDown)
         @apply !pl-0 !py-0 m-0;
       }
 
+      /* 单元格内链接的样式 */
       a.nc-cell-field-link {
+        /* 使用当前文本颜色 */
         @apply !text-current;
+        /* 悬停时保持当前颜色 */
         &:hover {
           @apply !text-current;
         }
       }
 
+      /* 长文本单元格的特殊样式 */
       &.nc-cell-longtext {
+        /* 设置行高 */
         @apply leading-[18px];
 
+        /* 文本区域的内边距 */
         textarea {
           @apply pr-8 !py-2;
         }
       }
 
+      /* 日期选择器输入框的样式 */
       .ant-picker-input {
+        /* 设置文本大小和行高 */
         @apply text-small leading-4;
         font-weight: 500;
 
+        /* 输入框的样式 */
         input {
           @apply text-small leading-4;
           font-weight: 500;
         }
       }
 
+      /* 附件单元格的特殊样式 */
       &.nc-cell-attachment {
         .nc-attachment-cell {
           .nc-attachment-wrapper {
+            /* 设置垂直内边距 */
             @apply !py-0.5;
 
+            /* 附件元素的最小高度 */
             .nc-attachment {
               @apply !min-h-4;
             }
@@ -2950,65 +3117,84 @@ onKeyStroke('ArrowDown', onDown)
         }
       }
 
+      /* 长文本单元格中富文本编辑器的样式 */
       &.nc-cell-longtext .long-text-wrapper .nc-rich-text-grid {
         @apply pl-0 -ml-1;
       }
 
+      /* 下拉选择器的样式 */
       .ant-select:not(.ant-select-customize-input) {
+        /* 选择器触发区域的样式 */
         .ant-select-selector {
+          /* 移除边框，禁止换行，设置右内边距 */
           @apply !border-none flex-nowrap pr-4.5;
         }
+        /* 箭头和清除按钮的位置 */
         .ant-select-arrow,
         .ant-select-clear {
           @apply right-[3px];
         }
       }
+      /* 选择搜索输入框的高度 */
       .ant-select-selection-search-input {
         @apply !h-[23px];
       }
 
+      /* 单选选择器的选择区域高度 */
       .ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
         @apply !h-auto;
       }
     }
   }
 
+  /* 表格样式 */
   table {
+    /* 使用CSS变量设置背景色 */
     background-color: var(--nc-grid-bg);
-
+    /* 设置边框分离模式 */
     border-collapse: separate;
     border-spacing: 0;
   }
 
+  /* 非新增单元格项的文本溢出处理 */
   td:not(.nc-grid-add-new-cell-item) {
     text-overflow: ellipsis;
   }
 
+  /* 活动单元格的伪元素样式 */
   td.active::after {
+    /* 创建一个覆盖整个单元格的伪元素 */
     content: '';
     position: absolute;
     z-index: 3;
+    /* 设置高度和宽度略大于单元格 */
     height: calc(100% + 2px);
     width: calc(100% + 2px);
     left: -1px;
     top: -1px;
+    /* 禁止鼠标事件 */
     pointer-events: none;
   }
 
-  // todo: replace with css variable
+  /* 活动单元格伪元素的颜色和背景 */
   td.active::after {
+    /* 使用主色调，设置边框和背景透明度 */
     @apply text-primary border-current bg-primary bg-opacity-5;
   }
 
+  /* 只读活动单元格的特殊样式 */
   td.active.readonly::after {
     @apply text-primary bg-grey-50 bg-opacity-5 !border-gray-200;
   }
 
+  /* 当前活动单元格的边框样式 */
   td.active-cell::after {
     @apply border-1 border-solid text-primary border-current bg-primary bg-opacity-3;
   }
 
+  /* 填充模式下单元格的伪元素 */
   td.filling::after {
+    /* 创建一个覆盖整个单元格的伪元素 */
     content: '';
     position: absolute;
     z-index: 3;
@@ -3019,23 +3205,20 @@ onKeyStroke('ArrowDown', onDown)
     pointer-events: none;
   }
 
-  // todo: replace with css variable
+  /* 填充模式下单元格伪元素的样式 */
   td.filling::after {
+    /* 使用虚线边框和浅灰色背景 */
     @apply border-1 border-dashed text-primary border-current bg-gray-100 bg-opacity-50;
   }
 
-  //td.active::before {
-  //  content: '';
-  //  z-index:4;
-  //  @apply absolute !w-[10px] !h-[10px] !right-[-5px] !bottom-[-5px] bg-primary;
-  //}
-
+  /* 第一列表头固定位置 */
   thead th:nth-child(1) {
     position: sticky !important;
     left: 0;
     z-index: 5;
   }
 
+  /* 第一列单元格固定位置 */
   tbody td:not(.nc-grid-add-new-cell-item):nth-child(1) {
     position: sticky !important;
     left: 0;
@@ -3043,7 +3226,9 @@ onKeyStroke('ArrowDown', onDown)
     background: white;
   }
 
+  /* 桌面模式下的特殊样式 */
   .desktop {
+    /* 第二列表头固定位置 */
     thead th:nth-child(2) {
       position: sticky !important;
       z-index: 5;
@@ -3051,6 +3236,7 @@ onKeyStroke('ArrowDown', onDown)
       @apply border-r-1 border-r-gray-200;
     }
 
+    /* 第二列单元格固定位置 */
     tbody tr:not(.nc-grid-add-new-cell) td:nth-child(2) {
       position: sticky !important;
       z-index: 4;
@@ -3060,60 +3246,78 @@ onKeyStroke('ArrowDown', onDown)
     }
   }
 
+  /* 骨架加载状态下的特殊边框样式 */
   .nc-grid-skeleton-loader {
+    /* 第二列表头边框 */
     thead th:nth-child(2) {
       @apply border-r-1 !border-r-gray-50;
     }
 
+    /* 第二列单元格边框 */
     tbody td:not(.nc-grid-add-new-cell-item):nth-child(2) {
       @apply border-r-1 !border-r-gray-50;
     }
   }
 }
 
+/* 网格列头部的样式 */
 .nc-grid-column-header {
+  /* 锁定状态下隐藏调整大小的控件 */
   &.no-resize :deep(.resizer) {
     @apply hidden;
   }
 
+  /* 调整大小控件的悬停、激活和聚焦状态 */
   :deep(.resizer:hover),
   :deep(.resizer:active),
   :deep(.resizer:focus) {
-    // todo: replace with primary color
+    /* 使用蓝色半透明背景 */
     @apply bg-blue-500/50;
+    /* 设置列调整光标 */
     cursor: col-resize;
   }
 }
 
+/* 网格行的样式 */
 .nc-grid-row {
+  /* 行复选框和展开按钮的容器 */
   .nc-row-expand-and-checkbox {
+    /* 在小屏幕上隐藏，设置宽度和对齐方式 */
     @apply !xs:hidden w-full items-center justify-between;
   }
 
+  /* 展开按钮的默认状态 */
   .nc-expand {
+    /* 非评论状态下隐藏 */
     &:not(.nc-comment) {
       @apply hidden;
     }
 
+    /* 评论状态下显示 */
     &.nc-comment {
       display: flex;
     }
   }
 
+  /* 活动行或悬停行的特殊样式 */
   &.active-row,
   &:not(.mouse-down):hover {
+    /* 隐藏行号，显示切换按钮 */
     .nc-row-no.toggle {
       @apply hidden;
     }
 
+    /* 显示展开按钮 */
     .nc-expand {
       @apply flex;
     }
 
+    /* 显示行复选框和展开按钮 */
     .nc-row-expand-and-checkbox {
       @apply !xs:hidden flex;
     }
 
+    /* 非选中行的单元格背景和边框 */
     &:not(.selected-row) {
       td.nc-grid-cell:not(.active),
       td:nth-child(2):not(.active) {
@@ -3122,6 +3326,7 @@ onKeyStroke('ArrowDown', onDown)
     }
   }
 
+  /* 选中行的单元格样式 */
   &.selected-row {
     td.nc-grid-cell:not(.active),
     td:nth-child(2):not(.active) {
@@ -3129,6 +3334,7 @@ onKeyStroke('ArrowDown', onDown)
     }
   }
 
+  /* 非选中行但后面紧跟选中行的边框样式 */
   &:not(.selected-row):has(+ .selected-row) {
     td.nc-grid-cell:not(.active),
     td:nth-child(2):not(.active):not(.nc-grid-add-new-cell-item) {
@@ -3136,6 +3342,7 @@ onKeyStroke('ArrowDown', onDown)
     }
   }
 
+  /* 非活动行但后面紧跟活动行或悬停行的边框样式 */
   &:not(.active-row):has(+ .active-row),
   &:not(.mouse-down):has(+ :hover) {
     &:not(.selected-row) {
@@ -3147,39 +3354,54 @@ onKeyStroke('ArrowDown', onDown)
   }
 }
 
+/* 网格头部的悬停效果 */
 .nc-grid-header {
   &:hover {
+    /* 悬停时隐藏标签 */
     .nc-no-label {
       @apply hidden;
     }
 
+    /* 悬停时显示全选复选框 */
     .nc-check-all {
       @apply flex;
     }
   }
 }
 
+/* 必填单元格的特殊样式 */
 .nc-required-cell {
+  /* 添加红色内阴影提示必填 */
   box-shadow: inset 0 0 2px #f00;
 }
 
+/* 填充句柄的样式 */
 .nc-fill-handle {
+  /* 设置大小、位置、背景色和交互属性 */
   @apply w-[6px] h-[6px] absolute rounded-full bg-red-500 !pointer-events-auto mt-[-4px] ml-[-4px];
 }
 
+/* 填充句柄的悬停、激活和聚焦状态 */
 .nc-fill-handle:hover,
 .nc-fill-handle:active,
 .nc-fill-handle:focus {
+  /* 增大尺寸并调整位置 */
   @apply w-[8px] h-[8px] mt-[-5px] ml-[-5px];
 }
 
+/* 骨架屏输入框的样式 */
 :deep(.ant-skeleton-input) {
+  /* 设置圆角、颜色和背景 */
   @apply rounded text-gray-100 !bg-gray-100 !bg-opacity-65;
+  /* 添加缓慢显示的动画 */
   animation: slow-show-1 5s ease 5s forwards;
 }
 
+/* 添加新行按钮的样式 */
 .nc-grid-add-new-row {
+  /* 深度选择器修改下拉触发按钮的样式 */
   :deep(.ant-btn.ant-dropdown-trigger.ant-btn-icon-only) {
+    /* 使用flex布局居中对齐 */
     @apply !flex items-center justify-center;
   }
 }

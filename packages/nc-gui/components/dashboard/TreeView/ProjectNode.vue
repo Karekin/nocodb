@@ -1,38 +1,51 @@
 <script lang="ts" setup>
+// 导入 Vue 的 nextTick 函数，用于在 DOM 更新后执行代码
 import { nextTick } from '@vue/runtime-core'
+
+// 导入 Ant Design Vue 的消息提示组件
 import { message } from 'ant-design-vue'
 import { ProjectRoles, RoleColors, RoleIcons, RoleLabels, WorkspaceRolesToProjectRoles, stringifyRolesObj } from 'nocodb-sdk'
 import type { BaseType, SourceType, TableType, WorkspaceUserRoles } from 'nocodb-sdk'
 import { LoadingOutlined } from '@ant-design/icons-vue'
 
+// 创建加载指示器组件，设置样式和旋转效果
 const indicator = h(LoadingOutlined, {
-  class: '!text-gray-400',
+  class: '!text-gray-400', // 设置文字颜色
   style: {
-    fontSize: '0.85rem',
+    fontSize: '0.85rem', // 设置字体大小
   },
-  spin: true,
+  spin: true, // 启用旋转效果
 })
 
+// 获取 Vue Router 实例，用于导航操作
 const router = useRouter()
 
+// 获取当前路由信息
 const route = router.currentRoute
 
+// 获取是否是共享项目的状态
 const { isSharedBase } = storeToRefs(useBase())
 
 const { setMenuContext, duplicateTable, contextMenuTarget, tableRenameId } = inject(TreeViewInj)!
 
+// 注入当前项目实例
 const base = inject(ProjectInj)!
 
+// 获取项目存储模块
 const basesStore = useBases()
 
+// 获取全局状态，包括是否是移动端和当前用户信息
 const { isMobileMode, user } = useGlobal()
 
+// 获取 API 实例，用于后端交互
 const { api } = useApi()
 
 const { createProject: _createProject, updateProject, getProjectMetaInfo, loadProject } = basesStore
 
+// 获取项目存储模块中的状态
 const { bases, basesUser } = storeToRefs(basesStore)
 
+// 计算协作人员列表，包含角色信息和基础角色映射
 const collaborators = computed(() => {
   return (basesUser.value.get(base.value?.id) || []).map((user: any) => {
     return {
@@ -47,26 +60,36 @@ const collaborators = computed(() => {
   })
 })
 
+// 计算当前用户的角色
 const currentUserRole = computed(() => {
   return collaborators.value.find((coll) => coll.id === user.value?.id)?.roles as keyof typeof RoleLabels
 })
 
+// 加载项目表格数据
 const { loadProjectTables } = useTablesStore()
 
+// 获取当前活动表格
 const { activeTable } = storeToRefs(useTablesStore())
 
+// 获取全局应用信息
 const { appInfo } = useGlobal()
 
+// 获取用户角色和 UI 权限
 const { orgRoles, isUIAllowed } = useRoles()
 
+// 使用标签页功能
 useTabs()
 
+// 使用键盘快捷键
 const { meta: metaKey, control } = useMagicKeys()
 
+// 刷新命令面板
 const { refreshCommandPalette } = useCommandPalette()
 
+// 是否处于编辑模式
 const editMode = ref(false)
 
+// 临时标题存储
 const tempTitle = ref('')
 
 const sourceRenameHelpers = ref<
@@ -79,30 +102,48 @@ const sourceRenameHelpers = ref<
   >
 >({})
 
+// 当前活动的基础 ID
 const activeBaseId = ref('')
 
+// 是否打开 ERD 模态框
 const isErdModalOpen = ref<Boolean>(false)
 
+// 国际化翻译函数
 const { t } = useI18n()
 
+// 输入框引用
 const input = ref<HTMLInputElement>()
 
+// 计算项目角色（基础角色或工作区角色）
 const baseRole = computed(() => base.value.project_role || base.value.workspace_role)
 
+// 获取活动项目 ID
 const { activeProjectId } = storeToRefs(useBases())
 
+// 获取基础 URL
 const { baseUrl } = useBase()
 
+// 获取事件追踪函数
 const { $e } = useNuxtApp()
 
+// 是否打开选项菜单
 const isOptionsOpen = ref(false)
+
+// 是否打开基础选项菜单
 const isBasesOptionsOpen = ref<Record<string, boolean>>({})
 
+// 活动键状态
 const activeKey = ref<string[]>([])
+
+// 搜索结果状态和过滤查询
 const [searchActive] = useToggle()
 const filterQuery = ref('')
 const keys = ref<Record<string, number>>({})
+
+// 表格删除对话框状态
 const isTableDeleteDialogVisible = ref(false)
+
+// 项目删除对话框状态
 const isBaseDeleteDialogVisible = ref(false)
 
 const { refreshViewTabTitle } = useViewsStore()
@@ -116,22 +157,25 @@ const baseViewOpen = computed(() => {
   return routeNameAfterProjectView.split('-').length === 2 || routeNameAfterProjectView.split('-').length === 1
 })
 
+// 检查是否显示基础选项
 const showBaseOption = (source: SourceType) => {
   return ['airtableImport', 'csvImport', 'jsonImport', 'excelImport'].some((permission) => isUIAllowed(permission, { source }))
 }
 
+// 启用编辑模式
 const enableEditMode = () => {
   if (!isUIAllowed('baseRename')) return
 
   editMode.value = true
   tempTitle.value = base.value.title!
   nextTick(() => {
-    input.value?.focus()
-    input.value?.select()
-    // input.value?.scrollIntoView()
+    input.value?.focus() // 聚焦输入框
+    input.value?.select() // 选中输入框内容
+    // input.value?.scrollIntoView() // 滚动到输入框
   })
 }
 
+// 启用源编辑模式
 const enableEditModeForSource = (sourceId: string) => {
   if (!isUIAllowed('baseRename')) return
 
@@ -146,12 +190,13 @@ const enableEditModeForSource = (sourceId: string) => {
   nextTick(() => {
     const input: HTMLInputElement | null = document.querySelector(`[data-source-rename-input-id="${sourceId}"]`)
     if (!input) return
-    input?.focus()
-    input?.select()
-    // input?.scrollIntoView()
+    input?.focus() // 聚焦输入框
+    input?.select() // 选中输入框内容
+    // input?.scrollIntoView() // 滚动到输入框
   })
 }
 
+// 更新源标题
 const updateSourceTitle = async (sourceId: string) => {
   const source = base.value.sources?.find((s) => s.id === sourceId)
 
@@ -164,24 +209,32 @@ const updateSourceTitle = async (sourceId: string) => {
   if (!sourceRenameHelpers.value[source.id].tempTitle) return
 
   try {
+    // 更新源别名
     await api.source.update(source.base_id, source.id, {
       alias: sourceRenameHelpers.value[source.id].tempTitle,
     })
 
+    // 重新加载项目数据
     await loadProject(source.base_id, true)
 
+    // 清除编辑状态
     delete sourceRenameHelpers.value[source.id]
 
+    // 记录事件
     $e('a:source:rename')
 
+    // 刷新视图标签标题
     refreshViewTabTitle?.()
   } catch (e: any) {
+    // 显示错误消息
     message.error(await extractSdkResponseErrorMsg(e))
   } finally {
+    // 刷新命令面板
     refreshCommandPalette()
   }
 }
 
+// 更新项目标题
 const updateProjectTitle = async () => {
   if (tempTitle.value) {
     tempTitle.value = tempTitle.value.trim()
@@ -190,24 +243,30 @@ const updateProjectTitle = async () => {
   if (!tempTitle.value) return
 
   try {
+    // 更新项目标题
     await updateProject(base.value.id!, {
       title: tempTitle.value,
     })
     editMode.value = false
     tempTitle.value = ''
 
+    // 记录事件
     $e('a:base:rename')
 
+    // 刷新视图标签标题
     refreshViewTabTitle?.()
   } catch (e: any) {
+    // 显示错误消息
     message.error(await extractSdkResponseErrorMsg(e))
   }
 }
 
+// 复制项目信息
 const { copy } = useCopy(true)
 
 const copyProjectInfo = async () => {
   try {
+    // 复制项目元信息到剪贴板
     if (
       await copy(
         Object.entries(await getProjectMetaInfo(base.value.id!)!)
@@ -215,7 +274,7 @@ const copyProjectInfo = async () => {
           .join('\n'),
       )
     ) {
-      // Copied to clipboard
+      // 显示复制成功消息
       message.info(t('msg.info.copiedToClipboard'))
     }
   } catch (e: any) {
@@ -224,12 +283,15 @@ const copyProjectInfo = async () => {
   }
 }
 
+// 定义暴露的方法
 defineExpose({
   enableEditMode,
 })
 
+// 设置颜色
 const setColor = async (color: string, base: BaseType) => {
   try {
+    // 更新项目元信息中的颜色
     const meta = {
       ...parseProp(base.meta),
       iconColor: color,
@@ -237,10 +299,13 @@ const setColor = async (color: string, base: BaseType) => {
 
     basesStore.updateProject(base.id!, { meta: JSON.stringify(meta) })
 
+    // 记录事件
     $e('a:base:icon:color:navdraw', { iconColor: color })
   } catch (e: any) {
+    // 显示错误消息
     message.error(await extractSdkResponseErrorMsg(e))
   } finally {
+    // 刷新命令面板
     refreshCommandPalette()
   }
 }
@@ -267,6 +332,7 @@ function openTableCreateDialog(sourceIndex?: number | undefined) {
 
   if (!sourceId || !base.value?.id) return
 
+  // 打开表格创建对话框
   const { close } = useDialog(resolveComponent('DlgTableCreate'), {
     'modelValue': isOpen,
     sourceId, // || sources.value[0].id,
@@ -275,6 +341,7 @@ function openTableCreateDialog(sourceIndex?: number | undefined) {
     'onUpdate:modelValue': () => closeDialog(),
   })
 
+  // 关闭对话框并处理结果
   function closeDialog(table?: TableType) {
     isOpen.value = false
 
@@ -286,7 +353,7 @@ function openTableCreateDialog(sourceIndex?: number | undefined) {
       activeKey.value.push(`collapse-${sourceId}`)
     }
 
-    // TODO: Better way to know when the table node dom is available
+    // 滚动到新创建的表格
     setTimeout(() => {
       const newTableDom = document.querySelector(`[data-table-id="${table.id}"]`)
       if (!newTableDom) return
@@ -298,6 +365,7 @@ function openTableCreateDialog(sourceIndex?: number | undefined) {
   }
 }
 
+// 添加新的项目子实体
 const isAddNewProjectChildEntityLoading = ref(false)
 
 async function addNewProjectChildEntity() {
@@ -305,15 +373,15 @@ async function addNewProjectChildEntity() {
 
   isAddNewProjectChildEntityLoading.value = true
 
+  // 检查项目是否已加载
   const isProjectPopulated = basesStore.isProjectPopulated(base.value.id!)
   if (!isProjectPopulated && base.value.type === NcProjectType.DB) {
-    // We do not wait for tables api, so that add new table is seamless.
-    // Only con would be while saving table duplicate table name FE validation might not work
-    // If the table list api takes time to load before the table name validation
+    // 加载项目表格数据
     loadProjectTables(base.value.id!)
   }
 
   try {
+    // 打开表格创建对话框
     openTableCreateDialog()
 
     if (!base.value.isExpanded && base.value.type !== NcProjectType.DB) {
@@ -324,6 +392,7 @@ async function addNewProjectChildEntity() {
   }
 }
 
+// 处理项目点击事件
 const onProjectClick = async (base: NcProject, ignoreNavigation?: boolean, toggleIsExpanded?: boolean) => {
   if (!base) {
     return
@@ -336,6 +405,7 @@ const onProjectClick = async (base: NcProject, ignoreNavigation?: boolean, toggl
   toggleIsExpanded = isMobileMode.value || toggleIsExpanded
 
   if (cmdOrCtrl && !ignoreNavigation) {
+    // 处理命令或控制键导航
     await navigateTo(
       `${cmdOrCtrl ? '#' : ''}${baseUrl({
         id: base.id!,
@@ -362,6 +432,7 @@ const onProjectClick = async (base: NcProject, ignoreNavigation?: boolean, toggl
   if (!isProjectPopulated) base.isLoading = true
 
   if (!ignoreNavigation) {
+    // 导航到项目 URL
     await navigateTo(
       baseUrl({
         id: base.id!,
@@ -372,6 +443,7 @@ const onProjectClick = async (base: NcProject, ignoreNavigation?: boolean, toggl
   }
 
   if (!isProjectPopulated) {
+    // 加载项目表格数据
     await loadProjectTables(base.id!)
   }
 
@@ -383,6 +455,7 @@ const onProjectClick = async (base: NcProject, ignoreNavigation?: boolean, toggl
   }
 }
 
+// 打开 ERD 视图
 function openErdView(source: SourceType) {
   $e('c:project:relation')
 
@@ -402,6 +475,7 @@ function openErdView(source: SourceType) {
   }
 }
 
+// 计算上下文菜单基础
 const contextMenuBase = computed(() => {
   if (contextMenuTarget.type === 'source') {
     return contextMenuTarget.value
@@ -412,6 +486,7 @@ const contextMenuBase = computed(() => {
   return null
 })
 
+// 监听活动表格变化
 watch(
   () => activeTable.value?.id,
   async () => {
@@ -429,6 +504,7 @@ watch(
   },
 )
 
+// 处理 ESC 键事件
 onKeyStroke('Escape', () => {
   if (isOptionsOpen.value) {
     isOptionsOpen.value = false
@@ -439,28 +515,34 @@ onKeyStroke('Escape', () => {
   }
 })
 
+// 项目复制状态
 const isDuplicateDlgOpen = ref(false)
 const selectedProjectToDuplicate = ref()
 
+// 复制项目
 const duplicateProject = (base: BaseType) => {
   selectedProjectToDuplicate.value = base
   isDuplicateDlgOpen.value = true
 }
 
+// 删除表格
 const tableDelete = () => {
   isTableDeleteDialogVisible.value = true
   $e('c:table:delete')
 }
 
+// 删除项目
 const projectDelete = () => {
   isBaseDeleteDialogVisible.value = true
   $e('c:project:delete')
 }
 
+// 获取源信息
 const getSource = (sourceId: string) => {
   return base.value.sources?.find((s) => s.id === sourceId)
 }
 
+// 监听标签元素状态
 const labelEl = ref()
 watch(
   () => labelEl.value && activeProjectId.value === base.value?.id,
@@ -474,12 +556,15 @@ watch(
   },
 )
 
+// 打开基础设置
 const openBaseSettings = async (baseId: string) => {
   await navigateTo(`/nc/${baseId}?page=base-settings`)
 }
 
+// 节点工具提示状态
 const showNodeTooltip = ref(true)
 
+// 计算是否打开上下文菜单
 const shouldOpenContextMenu = computed(() => {
   if (isSharedBase.value || !contextMenuTarget.value) return false
 
@@ -500,6 +585,7 @@ const shouldOpenContextMenu = computed(() => {
 </script>
 
 <template>
+  <!-- 基础下拉菜单 -->
   <NcDropdown :trigger="['contextmenu']" overlay-class-name="nc-dropdown-tree-view-context-menu">
     <div
       ref="labelEl"
@@ -508,6 +594,7 @@ const shouldOpenContextMenu = computed(() => {
       :data-testid="`nc-sidebar-base-${base.title}`"
       :data-base-id="base.id"
     >
+      <!-- 工具提示 -->
       <NcTooltip
         :tooltip-style="{ width: '300px', zIndex: '1049' }"
         :overlay-inner-style="{ width: '300px' }"
@@ -559,6 +646,7 @@ const shouldOpenContextMenu = computed(() => {
                 <a-spin v-if="base.isLoading" class="!ml-1.25 !flex !flex-row !items-center !my-0.5 w-8" :indicator="indicator" />
 
                 <div v-else>
+                  <!-- 颜色选择器 -->
                   <GeneralBaseIconColorPicker
                     :key="`${base.id}_${parseProp(base.meta).iconColor}`"
                     :type="base?.type"
@@ -572,6 +660,7 @@ const shouldOpenContextMenu = computed(() => {
               </div>
             </div>
 
+            <!-- 编辑模式下的输入框 -->
             <a-input
               v-if="editMode"
               ref="input"
@@ -586,6 +675,7 @@ const shouldOpenContextMenu = computed(() => {
               @keyup.esc="updateProjectTitle"
               @blur="updateProjectTitle"
             />
+            <!-- 非编辑模式下的标题 -->
             <NcTooltip
               v-else
               :disabled="!!collaborators.length"
@@ -602,6 +692,7 @@ const shouldOpenContextMenu = computed(() => {
             </NcTooltip>
 
             <template v-if="!editMode">
+              <!-- 选项菜单 -->
               <NcDropdown v-if="!isSharedBase" v-model:visible="isOptionsOpen" :trigger="['click']">
                 <NcButton
                   v-e="['c:base:options']"
@@ -652,7 +743,7 @@ const shouldOpenContextMenu = computed(() => {
 
                       <NcDivider v-if="['baseDuplicate', 'baseRename'].some((permission) => isUIAllowed(permission))" />
 
-                      <!-- Copy Project Info -->
+                      <!-- 复制项目信息 -->
                       <NcMenuItem
                         v-if="!isEeUI"
                         key="copy"
@@ -665,7 +756,7 @@ const shouldOpenContextMenu = computed(() => {
                         </div>
                       </NcMenuItem>
 
-                      <!-- ERD View -->
+                      <!-- ERD 视图 -->
                       <NcMenuItem
                         v-if="base?.sources?.[0]?.enabled"
                         key="erd"
@@ -678,7 +769,7 @@ const shouldOpenContextMenu = computed(() => {
                         </div>
                       </NcMenuItem>
 
-                      <!-- Swagger: Rest APIs -->
+                      <!-- API 文档 -->
                       <NcMenuItem
                         v-if="isUIAllowed('apiDocs')"
                         key="api"
@@ -731,6 +822,7 @@ const shouldOpenContextMenu = computed(() => {
                 </template>
               </NcDropdown>
 
+              <!-- 添加新实体按钮 -->
               <NcButton
                 v-if="isUIAllowed('tableCreate', { roles: baseRole, source: base?.sources?.[0] })"
                 v-e="['c:base:create-table']"
@@ -751,6 +843,7 @@ const shouldOpenContextMenu = computed(() => {
                 <GeneralIcon icon="plus" class="text-xl leading-5" style="-webkit-text-stroke: 0.15px" />
               </NcButton>
 
+              <!-- 展开/折叠按钮 -->
               <NcButton
                 v-e="['c:base:expand']"
                 type="text"
@@ -774,6 +867,7 @@ const shouldOpenContextMenu = computed(() => {
         </div>
       </NcTooltip>
 
+      <!-- 项目内容区域 -->
       <div
         v-if="base.id && !base.isLoading"
         key="g1"
@@ -784,6 +878,7 @@ const shouldOpenContextMenu = computed(() => {
           <div class="flex-1 overflow-y-auto overflow-x-hidden flex flex-col" :class="{ 'mb-[20px]': isSharedBase }">
             <div v-if="base?.sources?.[0]?.enabled" class="flex-1">
               <div class="transition-height duration-200">
+                <!-- 表格列表 -->
                 <DashboardTreeViewTableList :base="base" :source-index="0" />
               </div>
             </div>
@@ -934,7 +1029,7 @@ const shouldOpenContextMenu = computed(() => {
 
                                   <NcDivider />
 
-                                  <!-- ERD View -->
+                                  <!-- ERD 视图 -->
                                   <NcMenuItem key="erd" @click="openErdView(source)">
                                     <div v-e="['c:source:erd']" class="flex gap-2 items-center">
                                       <GeneralIcon icon="ncErd" />
@@ -970,6 +1065,7 @@ const shouldOpenContextMenu = computed(() => {
                         :key="`sortable-${source.id}-${source.id && source.id in keys ? keys[source.id] : '0'}`"
                         :nc-source="source.id"
                       >
+                        <!-- 表格列表 -->
                         <DashboardTreeViewTableList :base="base" :source-index="sourceIndex" />
                       </div>
                     </a-collapse-panel>
@@ -981,6 +1077,7 @@ const shouldOpenContextMenu = computed(() => {
         </template>
       </div>
     </div>
+    <!-- 上下文菜单 -->
     <template v-if="shouldOpenContextMenu" #overlay>
       <NcMenu
         class="!py-0 rounded text-sm"
@@ -995,6 +1092,7 @@ const shouldOpenContextMenu = computed(() => {
         <template v-else-if="contextMenuTarget.type === 'source'"></template>
 
         <template v-else-if="contextMenuTarget.type === 'table'">
+          <!-- 复制表格 ID -->
           <NcMenuItemCopyId
             v-if="contextMenuTarget.value"
             :id="contextMenuTarget.value.id"
@@ -1013,6 +1111,7 @@ const shouldOpenContextMenu = computed(() => {
             "
           >
             <NcDivider />
+            <!-- 重命名表格 -->
             <NcMenuItem
               v-if="isUIAllowed('tableRename', { source: getSource(contextMenuTarget.value?.source_id) })"
               @click="tableRenameId = `${contextMenuTarget.value?.id}:${contextMenuTarget.value?.source_id}`"
@@ -1023,6 +1122,7 @@ const shouldOpenContextMenu = computed(() => {
               </div>
             </NcMenuItem>
 
+            <!-- 复制表格 -->
             <NcMenuItem
               v-if="
                 isUIAllowed('tableDuplicate', { source: getSource(contextMenuTarget.value?.source_id) }) &&
@@ -1036,6 +1136,7 @@ const shouldOpenContextMenu = computed(() => {
               </div>
             </NcMenuItem>
             <NcDivider />
+            <!-- 删除表格 -->
             <NcMenuItem
               v-if="isUIAllowed('tableDelete', { source: getSource(contextMenuTarget.value?.source_id) })"
               class="!hover:bg-red-50"
@@ -1051,14 +1152,22 @@ const shouldOpenContextMenu = computed(() => {
       </NcMenu>
     </template>
   </NcDropdown>
+
+  <!-- 表格删除对话框 -->
   <DlgTableDelete
     v-if="contextMenuTarget.value?.id && base?.id"
     v-model:visible="isTableDeleteDialogVisible"
     :table-id="contextMenuTarget.value?.id"
     :base-id="base?.id"
   />
+
+  <!-- 项目删除对话框 -->
   <DlgBaseDelete v-model:visible="isBaseDeleteDialogVisible" :base-id="base?.id" />
+
+  <!-- 项目复制对话框 -->
   <DlgBaseDuplicate v-if="selectedProjectToDuplicate" v-model="isDuplicateDlgOpen" :base="selectedProjectToDuplicate" />
+
+  <!-- ERD 模态框 -->
   <GeneralModal v-model:visible="isErdModalOpen" size="large">
     <div class="h-[80vh]">
       <LazyDashboardSettingsErd :base-id="base?.id" :source-id="activeBaseId" />
@@ -1067,6 +1176,7 @@ const shouldOpenContextMenu = computed(() => {
 </template>
 
 <style lang="scss" scoped>
+// 折叠面板样式
 :deep(.ant-collapse-header) {
   @apply !mx-0 !pl-7.5 h-7 !xs:(pl-6 h-[3rem]) !pr-0.5 !py-0 hover:bg-gray-200 xs:(hover:bg-gray-50) !rounded-md;
 
@@ -1075,14 +1185,17 @@ const shouldOpenContextMenu = computed(() => {
   }
 }
 
+// 折叠面板项样式
 :deep(.ant-collapse-item) {
   @apply h-full;
 }
 
+// 折叠面板内容样式
 :deep(.ant-collapse-content-box) {
   @apply !px-0 !pb-0 !pt-0.25;
 }
 
+// 折叠面板悬停样式
 :deep(.ant-collapse-header:hover) {
   .nc-sidebar-node-btn {
     @apply !opacity-100 !inline-block;

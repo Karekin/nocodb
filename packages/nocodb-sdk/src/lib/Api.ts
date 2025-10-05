@@ -5142,6 +5142,36 @@ export interface SnapshotType {
   status?: string;
 }
 
+/**
+ * Model for Script
+ */
+export interface ScriptType {
+  /** Unique ID */
+  id?: string;
+  /** Title of the Script */
+  title?: string;
+  /** Description of the Script */
+  description?: string;
+  /** Meta data for the Script */
+  meta?: object;
+  /** Config for the Script */
+  config?: object;
+  /** Order of the Script */
+  order?: number;
+  /** Base ID */
+  base_id?: IdType;
+  /** Workspace ID */
+  fk_workspace_id?: IdType;
+  /** User ID of the creator */
+  created_by?: IdType;
+  /** Code of the script */
+  script?: string;
+  /** Last updated time */
+  updated_at?: string;
+  /** Creation time */
+  created_at?: string;
+}
+
 export interface ExtensionReqType {
   /** Unique Base ID */
   base_id?: IdType;

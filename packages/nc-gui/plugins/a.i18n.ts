@@ -50,7 +50,7 @@ const i18nPlugin = async (nuxtApp) => {
 }
 
 export default defineNuxtPlugin(async function (nuxtApp) {
-  if (!isEeUI) return await i18nPlugin(nuxtApp)
+  return await i18nPlugin(nuxtApp)
 })
 
 export { i18nPlugin }

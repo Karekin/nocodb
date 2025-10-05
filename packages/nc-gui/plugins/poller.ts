@@ -105,7 +105,7 @@ const pollPlugin = async (nuxtApp) => {
 }
 
 export default defineNuxtPlugin(async function (nuxtApp) {
-  if (!isEeUI) return await pollPlugin(nuxtApp)
+  return await pollPlugin(nuxtApp)
 })
 
 export { pollPlugin }

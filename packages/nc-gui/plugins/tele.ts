@@ -3,7 +3,7 @@ import { io } from 'socket.io-client'
 
 // todo: ignore init if tele disabled
 export default defineNuxtPlugin(async (nuxtApp) => {
-  if (!isEeUI) {
+  {
     const router = useRouter()
 
     const route = router.currentRoute

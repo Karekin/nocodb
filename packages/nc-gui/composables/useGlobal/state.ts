@@ -6,7 +6,7 @@ import { INITIAL_LEFT_SIDEBAR_WIDTH } from '~/lib/constants'
 export function useGlobalState(storageKey = 'nocodb-gui-v2'): State {
   /** get the preferred languages of a user, according to browser settings */
   const preferredLanguages = usePreferredLanguages()
-  /** todo: reimplement; get the preferred dark mode setting, according to browser settings */
+  /** Get the preferred dark mode setting, according to browser settings */
   //   const prefersDarkMode = $(usePreferredDark())
   const prefersDarkMode = false
 
@@ -27,7 +27,7 @@ export function useGlobalState(storageKey = 'nocodb-gui-v2'): State {
     const [lang, code] = language.split(/[_-]/)
 
     /** find all locales that match the language */
-    let availableLocales = i18n.global.availableLocales.filter((locale) => locale.startsWith(lang))
+    let availableLocales = i18n?.global?.availableLocales?.filter((locale) => locale.startsWith(lang)) || []
 
     /** If we can match more than one locale, we check if the code of the language matches as well */
     if (availableLocales.length > 1) {
@@ -38,7 +38,7 @@ export function useGlobalState(storageKey = 'nocodb-gui-v2'): State {
     const availableLocale = availableLocales[0]
 
     /** if we found a matching locale, return it */
-    if (availableLocale) locale = availableLocale as keyof typeof Language
+    if (availableLocale) return availableLocale as keyof typeof Language
 
     return locale
   }, 'en' /** fallback locale */)

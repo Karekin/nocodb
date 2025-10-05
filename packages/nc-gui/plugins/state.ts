@@ -36,7 +36,7 @@ const statePlugin = async (_nuxtApp) => {
 }
 
 export default defineNuxtPlugin(async function (nuxtApp) {
-  if (!isEeUI) return await statePlugin(nuxtApp)
+  return await statePlugin(nuxtApp)
 })
 
 export { statePlugin }

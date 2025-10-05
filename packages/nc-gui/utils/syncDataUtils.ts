@@ -1,7 +1,7 @@
 import type { FormDefinition, IntegrationsType, SyncCategory } from 'nocodb-sdk'
 import type { VNode } from '@vue/runtime-dom'
 import type { CSSProperties, FunctionalComponent, SVGAttributes } from 'nuxt/dist/app/compat/capi'
-import { ClientType, IntegrationCategoryType, SyncDataType } from '#imports'
+import { ClientType, IntegrationCategoryType, SyncDataType, iconMap } from '#imports'
 
 export const integrationsInitialized = ref(false)
 export interface IntegrationItemType {
@@ -439,6 +439,36 @@ export const allIntegrations: IntegrationItemType[] = [
     sub_type: SyncDataType.GOOGLE_SHEETS,
     icon: iconMap.googleSheet,
     type: IntegrationCategoryType.SPREAD_SHEET,
+  },
+
+  // AI Integrations
+  {
+    title: 'objects.syncData.openai',
+    sub_type: SyncDataType.OPENAI,
+    icon: iconMap.openai,
+    type: IntegrationCategoryType.AI,
+    isAvailable: true,
+  },
+  {
+    title: 'objects.syncData.claude',
+    sub_type: SyncDataType.CLAUDE,
+    icon: iconMap.claude,
+    type: IntegrationCategoryType.AI,
+    isAvailable: true,
+  },
+  {
+    title: 'objects.syncData.ollama',
+    sub_type: SyncDataType.OLLAMA,
+    icon: iconMap.ollama,
+    type: IntegrationCategoryType.AI,
+    isAvailable: true,
+  },
+  {
+    title: 'objects.syncData.groq',
+    sub_type: SyncDataType.GROQ,
+    icon: iconMap.groq,
+    type: IntegrationCategoryType.AI,
+    isAvailable: true,
   },
 
   // Others

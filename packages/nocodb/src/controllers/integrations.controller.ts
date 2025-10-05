@@ -144,14 +144,60 @@ export class IntegrationsController {
 
   @Get(['/api/v2/integrations'])
   async availableIntegrations() {
-    return Integration.availableIntegrations
-      .sort((a, b) => a.type.localeCompare(b.type))
-      .sort((a, b) => a.sub_type.localeCompare(b.sub_type))
-      .map((i) => ({
-        type: i.type,
-        sub_type: i.sub_type,
-        manifest: i.manifest,
-      }));
+    // Mock AI integrations for development
+    const mockAiIntegrations = [
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'openai',
+        manifest: {
+          title: 'OpenAI',
+          icon: 'openai',
+          description: 'OpenAI GPT models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'claude',
+        manifest: {
+          title: 'Claude',
+          icon: 'claude',
+          description: 'Anthropic Claude models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'ollama',
+        manifest: {
+          title: 'Ollama',
+          icon: 'ollama',
+          description: 'Local Ollama models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'groq',
+        manifest: {
+          title: 'Groq',
+          icon: 'groq',
+          description: 'Groq models for AI-powered features',
+        },
+      },
+    ];
+
+    // Combine mock AI integrations with existing integrations
+    const allIntegrations = [
+      ...mockAiIntegrations,
+      ...Integration.availableIntegrations
+        .sort((a, b) => a.type.localeCompare(b.type))
+        .sort((a, b) => a.sub_type.localeCompare(b.sub_type))
+        .map((i) => ({
+          type: i.type,
+          sub_type: i.sub_type,
+          manifest: i.manifest,
+        }))
+    ];
+
+    return allIntegrations;
   }
 
   @Get(['/api/v2/integrations/:type/:subType'])

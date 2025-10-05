@@ -62,7 +62,7 @@ const FEATURES = [
     id: 'integrations',
     title: 'Integrations',
     description: 'Enable dynamic integrations.',
-    enabled: false,
+    enabled: true,
     version: 1,
     isEngineering: true,
   },

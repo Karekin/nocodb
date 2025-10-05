@@ -94,7 +94,68 @@ export class IntegrationsService {
     offset?: number;
     query?: string;
   }) {
-    const integrations = await Integration.list({
+    // Mock AI integrations for development
+    const mockAiIntegrations = [
+      {
+        id: 'mock-openai-1',
+        title: 'OpenAI Integration',
+        type: IntegrationsType.Ai,
+        sub_type: 'openai',
+        fk_workspace_id: param.req.user?.id || 'mock-workspace',
+        created_by: param.req.user?.id || 'mock-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_private: false,
+        config: null,
+        sources: [],
+        source_count: 0,
+      },
+      {
+        id: 'mock-claude-1',
+        title: 'Claude Integration',
+        type: IntegrationsType.Ai,
+        sub_type: 'claude',
+        fk_workspace_id: param.req.user?.id || 'mock-workspace',
+        created_by: param.req.user?.id || 'mock-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_private: false,
+        config: null,
+        sources: [],
+        source_count: 0,
+      },
+      {
+        id: 'mock-ollama-1',
+        title: 'Ollama Integration',
+        type: IntegrationsType.Ai,
+        sub_type: 'ollama',
+        fk_workspace_id: param.req.user?.id || 'mock-workspace',
+        created_by: param.req.user?.id || 'mock-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_private: false,
+        config: null,
+        sources: [],
+        source_count: 0,
+      },
+      {
+        id: 'mock-groq-1',
+        title: 'Groq Integration',
+        type: IntegrationsType.Ai,
+        sub_type: 'groq',
+        fk_workspace_id: param.req.user?.id || 'mock-workspace',
+        created_by: param.req.user?.id || 'mock-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_private: false,
+        config: null,
+        sources: [],
+        source_count: 0,
+      },
+    ];
+
+    // Get real integrations from database
+    const realIntegrations = await Integration.list({
       userId: param.req.user?.id,
       includeDatabaseInfo: param.includeDatabaseInfo,
       type: param.type,
@@ -102,7 +163,16 @@ export class IntegrationsService {
       query: param.query,
     });
 
-    return integrations;
+    // Combine mock AI integrations with real integrations
+    const allIntegrations = {
+      list: [...mockAiIntegrations, ...realIntegrations.list],
+      pageInfo: {
+        ...realIntegrations.pageInfo,
+        totalRows: realIntegrations.pageInfo.totalRows + mockAiIntegrations.length,
+      },
+    };
+
+    return allIntegrations;
   }
 
   async integrationDelete(

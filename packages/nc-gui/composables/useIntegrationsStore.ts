@@ -459,34 +459,53 @@ const [useProvideIntegrationViewStore, _useIntegrationStore] = useInjectionState
 
     integrationsInitialized.value = true
 
-    const dynamicIntegrations = (await $api.integrations.list()) as {
-      type: IntegrationsType
-      sub_type: string
-      manifest: {
-        title?: string
-        icon?: string
-        description?: string
-        order?: number
-        hidden?: boolean
-      }
-    }[]
+    // Always add static AI integrations first - these are pre-configured
+    const staticAiIntegrations = [
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'openai',
+        manifest: {
+          title: 'OpenAI',
+          icon: 'openai',
+          description: 'OpenAI GPT models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'claude',
+        manifest: {
+          title: 'Claude',
+          icon: 'claude',
+          description: 'Anthropic Claude models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'ollama',
+        manifest: {
+          title: 'Ollama',
+          icon: 'ollama',
+          description: 'Local Ollama models for AI-powered features',
+        },
+      },
+      {
+        type: IntegrationsType.Ai,
+        sub_type: 'groq',
+        manifest: {
+          title: 'Groq',
+          icon: 'groq',
+          description: 'Groq models for AI-powered features',
+        },
+      },
+    ]
 
-    dynamicIntegrations.sort((a, b) => (a.manifest.order ?? Infinity) - (b.manifest.order ?? Infinity))
+    console.log('Loading static AI integrations:', staticAiIntegrations)
 
-    for (const di of dynamicIntegrations) {
+    for (const di of staticAiIntegrations) {
       let icon: FunctionalComponent<SVGAttributes, {}, any, {}> | VNode
 
-      if (di.manifest.icon) {
-        if (di.manifest.icon in iconMap) {
-          icon = iconMap[di.manifest.icon as keyof typeof iconMap]
-        } else {
-          if (isValidURL(di.manifest.icon)) {
-            icon = h('img', {
-              src: di.manifest.icon,
-              alt: di.manifest.title || di.sub_type,
-            })
-          }
-        }
+      if (di.manifest.icon && di.manifest.icon in iconMap) {
+        icon = iconMap[di.manifest.icon as keyof typeof iconMap]
       } else {
         icon = iconMap.puzzle
       }
@@ -498,12 +517,69 @@ const [useProvideIntegrationViewStore, _useIntegrationStore] = useInjectionState
         type: di.type,
         isAvailable: true,
         dynamic: true,
-        hidden: di.manifest?.hidden ?? false,
+        hidden: false,
       }
 
+      console.log('Adding AI integration:', integration)
       allIntegrations.push(integration)
 
       integrationsRefreshKey.value++
+    }
+
+    console.log('Total integrations after adding AI:', allIntegrations.length)
+
+    // Try to load additional dynamic integrations from backend (optional)
+    try {
+      const dynamicIntegrations = (await $api.integrations.list()) as {
+        type: IntegrationsType
+        sub_type: string
+        manifest: {
+          title?: string
+          icon?: string
+          description?: string
+          order?: number
+          hidden?: boolean
+        }
+      }[]
+
+      console.log('Backend integrations:', dynamicIntegrations)
+
+      dynamicIntegrations.sort((a, b) => (a.manifest.order ?? Number.POSITIVE_INFINITY) - (b.manifest.order ?? Number.POSITIVE_INFINITY))
+
+      for (const di of dynamicIntegrations) {
+        let icon: FunctionalComponent<SVGAttributes, {}, any, {}> | VNode
+
+        if (di.manifest.icon) {
+          if (di.manifest.icon in iconMap) {
+            icon = iconMap[di.manifest.icon as keyof typeof iconMap]
+          } else {
+            if (isValidURL(di.manifest.icon)) {
+              icon = h('img', {
+                src: di.manifest.icon,
+                alt: di.manifest.title || di.sub_type,
+              })
+            }
+          }
+        } else {
+          icon = iconMap.puzzle
+        }
+
+        const integration: IntegrationItemType = {
+          title: di.manifest.title || di.sub_type,
+          sub_type: di.sub_type,
+          icon,
+          type: di.type,
+          isAvailable: true,
+          dynamic: true,
+          hidden: di.manifest?.hidden ?? false,
+        }
+
+        allIntegrations.push(integration)
+
+        integrationsRefreshKey.value++
+      }
+    } catch (error) {
+      console.log('Failed to load additional dynamic integrations (this is expected):', error)
     }
   }
 
